@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+  <title>Browser Test</title>
+  <script src="https://code.jquery.com/jquery-3.3.1.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" integrity="sha384-WskhaSGFgHYWDcbwN70/dfYBj47jz9qbsMId/iRN3ewGhXQFZCSftd1LZCfmhktB" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js" integrity="sha384-smHYKdLADwkXOn1EmN1qk/HfnUcbVRZyYmZ4qpPea6sjB/pTJ0euyQp0Mk8ck+5T" crossorigin="anonymous"></script>
+  <script src="dist/todo.client.js"></script>
+  <script>
+
+  const WebSocket = require('ws');
+
+  const ws = new WebSocket('ws://localhost/', {
+    perMessageDeflate: false
+  });
+
+  //
+  // $(function() {
+  //
+  //   // Example of a jQuery Reconciler
+  //   const reconciler = function({node, template}){
+  //     return function(dataList){
+  //
+  //       dataList.forEach(function(data){
+  //         const interpolation = $(template).clone(true);
+  //         $(interpolation).attr('id', data.uuid);
+  //
+  //         $('*[data-variable]', interpolation).each(function(){
+  //           const key = $(this).data('variable');
+  //           const value = data[key];
+  //           if($(this).data('dangerously')){
+  //             $(this).html(value);
+  //           }else{
+  //             $(this).text(value);
+  //           }
+  //         }); //interpolation
+  //
+  //         const selection = $('#'+data.uuid, node);
+  //         if( selection.length ){
+  //           selection.replaceWith(interpolation)
+  //         }else{
+  //           $(node).append(interpolation);
+  //         }
+  //
+  //       }); // for each data in list
+  //
+  //     } // returned function
+  //   }
+  //
+  //
+  //
+  //
+  //   $('*[data-mount]').each(function(){
+  //     const node = this;
+  //     const path = $(node).data('mount');
+  //     const template = $(node).children(0).clone();
+  //     $(node).children(0).hide();
+  //     pookie.reconcile({path}, reconciler({node, template}))
+  //   })
+  //
+  // });
+
+
+
+  </script>
+
+</head>
+
+<body>
+
+<div class="container">
+  <div class="row">
+
+    <div class="col-6">
+      add doc / delete doc
+      update doc
+    </div>
+
+    <div class="col-6">
+
+      <div>
+
+        <div class="card">
+          <ul data-mount="/Applications/Todo/Today" class="list-group list-group-flush">
+            <li class="list-group-item"> <span data-variable="text"></span> <span data-variable="version"></span> <span data-variable="due"></span> </li>
+          </ul>
+        </div>
+
+      </div>
+
+      query
+      --
+      query result (via re-updater)
+    </div>
+
+  </div>
+</div>
+
+</body>
+
+</html>
