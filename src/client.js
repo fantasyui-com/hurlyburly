@@ -20,7 +20,7 @@ bogo.on('message', function(message) {
    const jQueryReconciler = function({node, template}){
      return function(dataList){
 
-       dataList.forEach(function(data){
+       if(dataList && dataList.forEach) dataList.forEach(function(data){
          const interpolation = $(template).clone(true);
          $(interpolation).attr('id', data.uuid);
 
@@ -50,7 +50,7 @@ bogo.on('message', function(message) {
 
 
    $('*[data-mount]').each(function(){
-     
+
      const node = this;
      const path = $(node).data('mount');
      const template = $(node).children(0).clone();

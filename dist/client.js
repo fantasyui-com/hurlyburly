@@ -710,7 +710,7 @@ module.exports = function(path, reconciler){
 
   const fake = {};
 
-  fake.uuid = uuidv4();
+  fake.uuid = (new Date).getTime();
   fake.version = (new Date).getTime();
   fake.class = (new Date).getTime();
 
@@ -749,7 +749,7 @@ $(function () {
 
     return function (dataList) {
 
-      dataList.forEach(function (data) {
+      if (dataList && dataList.forEach) dataList.forEach(function (data) {
         var interpolation = $(template).clone(true);
         $(interpolation).attr('id', data.uuid);
 

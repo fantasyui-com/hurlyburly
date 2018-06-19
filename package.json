@@ -21,7 +21,7 @@
     "bogo": "^1.4.0",
     "bufferutil": "^3.0.5",
     "cuddlemuffin": "^1.5.0",
-    "pookie": "^1.18.0",
+    "pookie": "^1.19.0",
     "utf-8-validate": "^4.0.2",
     "ws": "^5.2.0"
   },
