@@ -701,10 +701,11 @@ const Tree = require('./lib/Tree.js')
 const Root = require('./lib/Root.js')
 const Branch = require('./lib/Branch.js')
 
-module.exports = function({options, reconciler}){
+module.exports = function(path, reconciler){
+
+  const root = new Root();
 
   const response = {root};
-  const root = new Root();
 
 
   const fake = {};
@@ -773,14 +774,13 @@ $(function () {
   };
 
   $('*[data-mount]').each(function () {
+
     var node = this;
     var path = $(node).data('mount');
     var template = $(node).children(0).clone();
     $(node).children(0).hide();
 
-    var options = { path: path };
-    var reconciler = jQueryReconciler({ node: node, template: template });
-    pookie({ options: options, reconciler: reconciler });
+    pookie(path, jQueryReconciler({ node: node, template: template }));
   });
 });
 

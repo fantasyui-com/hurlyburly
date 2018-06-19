@@ -50,14 +50,13 @@ bogo.on('message', function(message) {
 
 
    $('*[data-mount]').each(function(){
+     
      const node = this;
      const path = $(node).data('mount');
      const template = $(node).children(0).clone();
      $(node).children(0).hide();
 
-     const options = {path};
-     const reconciler = jQueryReconciler({node, template});
-     pookie({options, reconciler})
+     pookie(path, jQueryReconciler({node, template}))
 
 
    })
