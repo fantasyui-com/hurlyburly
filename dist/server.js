@@ -8,12 +8,12 @@ wss.on('connection', function connection(ws) {
     console.log('server received: %s', message);
   });
 
-  if(ws.readyState === 1) ws.send(JSON.stringify({name:'message', data:'Bueno Loco!'}));
+  ws.send(JSON.stringify({name:'message', data:'Bueno Loco!'}));
 
   setInterval(function(){
 
     try{
-      if(ws.readyState === 1) ws.send( JSON.stringify({name:'message', data:'something!'}) );
+      ws.send(JSON.stringify({name:'message', data:'something!'}));
     }catch(e){
       console.log(e)
     }
