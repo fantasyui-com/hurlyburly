@@ -1,5 +1,5 @@
 
-const pookie = require('pookie');
+const pookie = require('pookie/source.js');
 const bogo = require('bogo')(8081);
 
 bogo.on('message', function(message) {
@@ -12,11 +12,12 @@ bogo.on('message', function(message) {
 
 });
 
+//Applications/Todo/Today
 
  $(function() {
 
    // Example of a jQuery Reconciler
-   const reconciler = function({node, template}){
+   const jQueryReconciler = function({node, template}){
      return function(dataList){
 
        dataList.forEach(function(data){
@@ -53,7 +54,12 @@ bogo.on('message', function(message) {
      const path = $(node).data('mount');
      const template = $(node).children(0).clone();
      $(node).children(0).hide();
-     pookie.reconcile({path}, reconciler({node, template}))
+
+     const options = {path};
+     const reconciler = jQueryReconciler({node, template});
+     pookie({options, reconciler})
+
+
    })
 
  });
