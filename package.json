@@ -4,7 +4,7 @@
   "description": "Todo Application based on pookie object tree database.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "build.sh"
   },
   "repository": {
     "type": "git",
@@ -18,7 +18,16 @@
   },
   "homepage": "https://github.com/fantasyui-com/hurlyburly#readme",
   "dependencies": {
-    "pookie": "^1.13.0",
+    "bogo": "^1.3.0",
+    "bufferutil": "^3.0.5",
+    "cuddlemuffin": "^1.5.0",
+    "pookie": "^1.14.0",
+    "utf-8-validate": "^4.0.2",
     "ws": "^5.2.0"
+  },
+  "devDependencies": {
+    "babel-core": "^6.26.3",
+    "babel-preset-env": "^1.7.0",
+    "babelify": "^8.0.0"
   }
 }
