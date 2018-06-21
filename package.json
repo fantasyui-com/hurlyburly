@@ -1,6 +1,6 @@
 {
   "name": "hurlyburly",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Todo Application based on pookie object tree database.",
   "main": "index.js",
   "scripts": {
