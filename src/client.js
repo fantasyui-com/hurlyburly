@@ -13,9 +13,11 @@ make Root/Users/Admin
 make Root/Users/Admin/Messages
 make Root/Users/System/Messages
 
+make Applications/Todo/Today today,todo
+
 `;
 
-const pookie = require('pookie')(vfs);
+const pookie = require('../../pookie')(vfs);
 const bogo = require('bogo')(8081);
 const reconciler = require('./reconcile.js');
 
@@ -27,7 +29,6 @@ bogo.on('message', function(message) {
 });
 
 bogo.on('object', function(object) {
-  console.log('got object', object);
   pookie.pipe(object); // insert object into pookie
 });
 

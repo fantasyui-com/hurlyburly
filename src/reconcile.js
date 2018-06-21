@@ -1,7 +1,10 @@
 module.exports = function({node, template}){
   return function(dataList){
 
+    console.log('Reconciler got a dataList', dataList);
+
     if(dataList && dataList.forEach) dataList.forEach(function(data){
+
       const interpolation = $(template).clone(true);
       $(interpolation).attr('id', data.uuid);
 

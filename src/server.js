@@ -20,4 +20,14 @@ wss.on('connection', function connection(ws) {
 
   }, 5000);
 
+  setInterval(function(){
+
+    try{
+      ws.send(JSON.stringify({name:'object', data: {uuid:'aaf', version:1, tags:['todo', 'today', 'bork'], text:"Buy Milk!"} }));
+    }catch(e){
+      console.log(e)
+    }
+
+  }, 2000);
+
 });
