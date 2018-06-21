@@ -730,48 +730,44 @@ var pookie = require('pookie/source.js');
 var bogo = require('bogo')(8081);
 
 bogo.on('message', function (message) {
-
   console.log('Server Sent: %s', message);
-
   var name = 'message';
   var data = 'Hello from Client';
   bogo.emit('reply', { name: name, data: data });
 });
 
-//Applications/Todo/Today
+// Example of a jQuery Reconciler
+var jQueryReconciler = function jQueryReconciler(_ref) {
+  var node = _ref.node,
+      template = _ref.template;
+
+  return function (dataList) {
+
+    if (dataList && dataList.forEach) dataList.forEach(function (data) {
+      var interpolation = $(template).clone(true);
+      $(interpolation).attr('id', data.uuid);
+
+      $('*[data-variable]', interpolation).each(function () {
+        var key = $(this).data('variable');
+        var value = data[key];
+        if ($(this).data('dangerously')) {
+          $(this).html(value);
+        } else {
+          $(this).text(value);
+        }
+      }); //interpolation
+
+      var selection = $('#' + data.uuid, node);
+      if (selection.length) {
+        selection.replaceWith(interpolation);
+      } else {
+        $(node).append(interpolation);
+      }
+    }); // for each data in list
+  }; // returned function
+};
 
 $(function () {
-
-  // Example of a jQuery Reconciler
-  var jQueryReconciler = function jQueryReconciler(_ref) {
-    var node = _ref.node,
-        template = _ref.template;
-
-    return function (dataList) {
-
-      if (dataList && dataList.forEach) dataList.forEach(function (data) {
-        var interpolation = $(template).clone(true);
-        $(interpolation).attr('id', data.uuid);
-
-        $('*[data-variable]', interpolation).each(function () {
-          var key = $(this).data('variable');
-          var value = data[key];
-          if ($(this).data('dangerously')) {
-            $(this).html(value);
-          } else {
-            $(this).text(value);
-          }
-        }); //interpolation
-
-        var selection = $('#' + data.uuid, node);
-        if (selection.length) {
-          selection.replaceWith(interpolation);
-        } else {
-          $(node).append(interpolation);
-        }
-      }); // for each data in list
-    }; // returned function
-  };
 
   $('*[data-mount]').each(function () {
 
