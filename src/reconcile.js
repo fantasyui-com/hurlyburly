@@ -1,7 +1,7 @@
 module.exports = function({node, template}){
   return function(dataList){
 
-    console.log('Reconciler got a dataList', dataList);
+    //console.log('Reconciler got a dataList', dataList);
 
     if(dataList && dataList.forEach) dataList.forEach(function(data){
 

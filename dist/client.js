@@ -663,7 +663,7 @@ class Branch  extends EventEmitter {
     this.emit('object', object);
 
 
-    console.log( this.name, this.tags, object.tags, this.tagged(object.tags) )
+    // console.log( this.name, this.tags, object.tags, this.tagged(object.tags) )
 
     if( this.tagged(object.tags) ) {
       // We have a match...
@@ -741,7 +741,7 @@ class Branch  extends EventEmitter {
     });
 
     selectedNode.tag(tags);
-    console.log( 'Tagged "%s" with %s', selectedNode.name, tags );
+    // console.log( 'Tagged "%s" with %s', selectedNode.name, tags );
 
   }
 
@@ -807,7 +807,7 @@ var bogo = require('bogo')(8081);
 var reconciler = require('./reconcile.js');
 
 bogo.on('message', function (message) {
-  console.log('Server Sent: %s', message);
+  //console.log('Server Sent: %s', message);
   var name = 'message';
   var data = 'Hello from Client';
   bogo.emit('reply', { name: name, data: data });
@@ -836,7 +836,7 @@ module.exports = function (_ref) {
 
   return function (dataList) {
 
-    console.log('Reconciler got a dataList', dataList);
+    //console.log('Reconciler got a dataList', dataList);
 
     if (dataList && dataList.forEach) dataList.forEach(function (data) {
 

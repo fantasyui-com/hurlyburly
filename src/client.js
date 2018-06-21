@@ -22,7 +22,7 @@ const bogo = require('bogo')(8081);
 const reconciler = require('./reconcile.js');
 
 bogo.on('message', function(message) {
-  console.log('Server Sent: %s', message);
+  //console.log('Server Sent: %s', message);
   const name = 'message';
   const data = 'Hello from Client';
   bogo.emit('reply', {name,data});

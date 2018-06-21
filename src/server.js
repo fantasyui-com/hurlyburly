@@ -8,25 +8,25 @@ wss.on('connection', function connection(ws) {
     console.log('server received: %s', message);
   });
 
-  ws.send(JSON.stringify({name:'message', data:'Bueno Loco!'}));
+  if(ws.readyState == 1) ws.send(JSON.stringify({name:'message', data:'Bueno Loco!'}));
 
   setInterval(function(){
 
     try{
-      ws.send(JSON.stringify({name:'message', data:'something!'}));
+      if(ws.readyState == 1) ws.send(JSON.stringify({name:'message', data:'something!'}));
     }catch(e){
-      console.log(e)
+      //console.log(e)
     }
 
   }, 5000);
 
-  ws.send(JSON.stringify({name:'object', data: {uuid:'aaf', version:1, tags:['todo', 'today', 'bork'], text:"Buy Milk!"} }));
+  if(ws.readyState == 1) ws.send(JSON.stringify({name:'object', data: {uuid:'aaf', version:1, tags:['todo', 'today', 'bork'], text:"Buy Milk!"} }));
   setInterval(function(){
 
     try{
-      ws.send(JSON.stringify({name:'object', data: {uuid:'aag', version:1, tags:['todo', 'today', 'bork'], text:"Buy Socks!"} }));
+      if(ws.readyState == 1) ws.send(JSON.stringify({name:'object', data: {uuid:'aag', version:1, tags:['todo', 'today', 'bork'], text:"Buy Socks!"} }));
     }catch(e){
-      console.log(e)
+      //console.log(e)
     }
 
   }, 2000);
