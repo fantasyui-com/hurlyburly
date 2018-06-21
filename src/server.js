@@ -20,10 +20,11 @@ wss.on('connection', function connection(ws) {
 
   }, 5000);
 
+  ws.send(JSON.stringify({name:'object', data: {uuid:'aaf', version:1, tags:['todo', 'today', 'bork'], text:"Buy Milk!"} }));
   setInterval(function(){
 
     try{
-      ws.send(JSON.stringify({name:'object', data: {uuid:'aaf', version:1, tags:['todo', 'today', 'bork'], text:"Buy Milk!"} }));
+      ws.send(JSON.stringify({name:'object', data: {uuid:'aag', version:1, tags:['todo', 'today', 'bork'], text:"Buy Socks!"} }));
     }catch(e){
       console.log(e)
     }

@@ -17,7 +17,7 @@ make Applications/Todo/Today today,todo
 
 `;
 
-const pookie = require('../../pookie')(vfs);
+const pookie = require('pookie')(vfs);
 const bogo = require('bogo')(8081);
 const reconciler = require('./reconcile.js');
 

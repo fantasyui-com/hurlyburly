@@ -582,11 +582,227 @@ function functionBindPolyfill(context) {
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"events":8}],2:[function(require,module,exports){
+const Tree = require('./lib/Tree.js');
+const Root = require('./lib/Root.js');
+const Branch = require('./lib/Branch.js');
+
+module.exports = function(vfs){
+
+  const root = new Root();
+  Tree.importMap(root, Tree.decodeMap(vfs));
+
+  return {
+
+    mount1: function(path, reconciler){
+
+      const response = {root};
+      const fake = {};
+
+      fake.uuid = (new Date).getTime();
+      fake.version = (new Date).getTime();
+      fake.class = (new Date).getTime();
+
+      // when changes are deted the tree will
+      reconciler( fake );
+      setInterval(function(){
+        reconciler( fake );
+      },3000);
+
+      return response;
+    }, // API
+
+    mount: function(path, reconciler){
+      const branch = root.locate(path);
+      branch.on('data', function(dataList){
+        console.log('Path "%s" got data and is sending it into the reconciler.', path)
+        reconciler(dataList);
+      });
+    }, // API
+
+    pipe: function(object){
+      root.pipe(object);
+    }, // API
+
+  } // return object
+} // main
+
+},{"./lib/Branch.js":3,"./lib/Root.js":4,"./lib/Tree.js":5}],3:[function(require,module,exports){
+const EventEmitter = require('events');
+
+class Branch  extends EventEmitter {
+
+  constructor(name, parent) {
+    super();
+
+    this.name = name;
+    this.data = null;
+
+    this.parent = parent;
+    this.children = new Map();
+    this.content = new Map();
+
+    this.tags = new Set();
+  }
+
+  tag(tags=[]) {
+    // apply tag
+    tags.forEach(tag => {
+      this.tags.add(tag);
+    });
+  }
+
+  tagged(tags) {
+    let match = false;
+    tags.forEach(tag => {
+      if(this.tags.has(tag)) match = true;
+    });
+    return match
+  }
+
+  pipe(object) {
+    this.emit('object', object);
+
+
+    console.log( this.name, this.tags, object.tags, this.tagged(object.tags) )
+
+    if( this.tagged(object.tags) ) {
+      // We have a match...
+      // Capture content
+      this.content.set( object.uuid, object );
+      this.emit( 'data', this.content );
+
+    } else {
+
+      // Pass the data down as it dod not match and thus does not belong in here...
+      for (let [key, child] of this.children) {
+        child.pipe(object);
+      }
+
+    }
+
+
+  }
+
+  has(name) {
+    return this.children.has(name);
+  }
+
+  set(name, object) {
+    this.children.set(name, object);
+    return object;
+  }
+
+  get(name) {
+    return this.children.get(name);
+  }
+
+  locate( input ) {
+    const path = Array.isArray(input)?input:input.split('/');
+    let selectedNode = this;
+
+    //console.log('Locate: %s', path)
+    path.forEach(function(name){
+
+      //console.log("Does selected node (%s) have a name of %s? :", selectedNode.name, name, selectedNode.has(name) )
+
+        if( selectedNode.has(name) ){
+
+          // name already there, so just grab that node
+          selectedNode = selectedNode.get(name);
+
+        }else{
+
+          // create new node
+          selectedNode = null;
+
+        }
+
+
+
+    });
+
+    return selectedNode;
+  }
+
+  make({path, tags}) {
+
+    let selectedNode = this;
+
+    path.forEach(function(name){
+
+      if(selectedNode.has(name) ){
+        // name already there, so just grab that node
+        selectedNode = selectedNode.get(name);
+      }else{
+        // create new node
+        selectedNode = selectedNode.set(name, new Branch(name, selectedNode));
+      }
+
+    });
+
+    selectedNode.tag(tags);
+    console.log( 'Tagged "%s" with %s', selectedNode.name, tags );
+
+  }
+
+}
+
+module.exports = Branch;
+
+},{"events":8}],4:[function(require,module,exports){
+
+const Branch = require('./Branch.js');
+
+class Root extends Branch {
+  constructor(name) {
+    super('root');
+  }
+}
+
+module.exports = Root;
+
+},{"./Branch.js":3}],5:[function(require,module,exports){
+// This is a Utility Object like Math or Array
+
+const Root = require('./Root.js');
+const Branch = require('./Branch.js');
+
+const Tree = {
+
+  decodeMap(map) {
+    const response = map.split( '\n' ) // turn into lines
+     .map( l=>l.trim().replace(/ +/g, ' ') ) // clean up lines
+     .filter( l=>!(l.match(/^ {0,}#/)) ) // eliminate comments
+     .filter( l=>l ) // eliminate empties
+     .map(function(l){ let [cmd, path, tags] = l.split(" "); return {cmd, path, tags}; } ) // split cmd/path-string
+     .map(function(o){ o.path = o.path.split("/"); o.tags = o.tags?o.tags.split(","):[]; return o;} ) // split path into fragments
+    return response;
+  },
+
+  importMap(tree, map) {
+    map.forEach(function({cmd, path, tags}){
+      tree[cmd]({path, tags});
+    })
+  },
+
+  importData(root, producer) {
+    producer(function(record){
+      //console.log(record);
+      root.pipe(record)
+    });
+  }
+
+
+}
+
+module.exports = Tree;
+
+},{"./Branch.js":3,"./Root.js":4}],6:[function(require,module,exports){
 'use strict';
 
 var vfs = '\n\n# Main Objects\nmake Root/Users\nmake Root/Docs\nmake Root/Messages\n\n# Add Users\nmake Root/Users/System\nmake Root/Users/Admin\n\n# Messages to display\nmake Root/Users/Admin/Messages\nmake Root/Users/System/Messages\n\nmake Applications/Todo/Today today,todo\n\n';
 
-var pookie = require('../../pookie')(vfs);
+var pookie = require('pookie')(vfs);
 var bogo = require('bogo')(8081);
 var reconciler = require('./reconcile.js');
 
@@ -611,7 +827,7 @@ $(function () {
   });
 });
 
-},{"../../pookie":4,"./reconcile.js":3,"bogo":1}],3:[function(require,module,exports){
+},{"./reconcile.js":7,"bogo":1,"pookie":2}],7:[function(require,module,exports){
 'use strict';
 
 module.exports = function (_ref) {
@@ -647,308 +863,7 @@ module.exports = function (_ref) {
   }; // returned function
 };
 
-},{}],4:[function(require,module,exports){
-'use strict';
-
-var Tree = require('./lib/Tree.js');
-var Root = require('./lib/Root.js');
-var Branch = require('./lib/Branch.js');
-
-module.exports = function (vfs) {
-
-  var root = new Root();
-  Tree.importMap(root, Tree.decodeMap(vfs));
-
-  return {
-
-    mount1: function mount1(path, reconciler) {
-
-      var response = { root: root };
-      var fake = {};
-
-      fake.uuid = new Date().getTime();
-      fake.version = new Date().getTime();
-      fake.class = new Date().getTime();
-
-      // when changes are deted the tree will
-      reconciler(fake);
-      setInterval(function () {
-        reconciler(fake);
-      }, 3000);
-
-      return response;
-    }, // API
-
-    mount: function mount(path, reconciler) {
-      var branch = root.locate(path);
-      branch.on('data', function (dataList) {
-        console.log('Path "%s" got data and is sending it into the reconciler.', path);
-        reconciler(dataList);
-      });
-    }, // API
-
-    pipe: function pipe(object) {
-      root.pipe(object);
-    } // API
-
-    // return object
-  };
-}; // main
-
-},{"./lib/Branch.js":5,"./lib/Root.js":6,"./lib/Tree.js":7}],5:[function(require,module,exports){
-'use strict';
-
-var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; }();
-
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-var EventEmitter = require('events');
-
-var Branch = function (_EventEmitter) {
-  _inherits(Branch, _EventEmitter);
-
-  function Branch(name, parent) {
-    _classCallCheck(this, Branch);
-
-    var _this = _possibleConstructorReturn(this, (Branch.__proto__ || Object.getPrototypeOf(Branch)).call(this));
-
-    _this.name = name;
-    _this.data = null;
-
-    _this.parent = parent;
-    _this.children = new Map();
-    _this.content = new Map();
-
-    _this.tags = new Set();
-    return _this;
-  }
-
-  _createClass(Branch, [{
-    key: 'tag',
-    value: function tag() {
-      var _this2 = this;
-
-      var tags = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : [];
-
-      // apply tag
-      tags.forEach(function (tag) {
-        _this2.tags.add(tag);
-      });
-    }
-  }, {
-    key: 'tagged',
-    value: function tagged(tags) {
-      var _this3 = this;
-
-      var match = false;
-      tags.forEach(function (tag) {
-        if (_this3.tags.has(tag)) match = true;
-      });
-      return match;
-    }
-  }, {
-    key: 'pipe',
-    value: function pipe(object) {
-      this.emit('object', object);
-
-      console.log(this.name, this.tags, object.tags, this.tagged(object.tags));
-
-      if (this.tagged(object.tags)) {
-        // We have a match...
-        // Capture content
-        this.content.set(object.uuid, object);
-        this.emit('data', this.content);
-      } else {
-
-        // Pass the data down as it dod not match and thus does not belong in here...
-        var _iteratorNormalCompletion = true;
-        var _didIteratorError = false;
-        var _iteratorError = undefined;
-
-        try {
-          for (var _iterator = this.children[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-            var _ref = _step.value;
-
-            var _ref2 = _slicedToArray(_ref, 2);
-
-            var key = _ref2[0];
-            var child = _ref2[1];
-
-            child.pipe(object);
-          }
-        } catch (err) {
-          _didIteratorError = true;
-          _iteratorError = err;
-        } finally {
-          try {
-            if (!_iteratorNormalCompletion && _iterator.return) {
-              _iterator.return();
-            }
-          } finally {
-            if (_didIteratorError) {
-              throw _iteratorError;
-            }
-          }
-        }
-      }
-    }
-  }, {
-    key: 'has',
-    value: function has(name) {
-      return this.children.has(name);
-    }
-  }, {
-    key: 'set',
-    value: function set(name, object) {
-      this.children.set(name, object);
-      return object;
-    }
-  }, {
-    key: 'get',
-    value: function get(name) {
-      return this.children.get(name);
-    }
-  }, {
-    key: 'locate',
-    value: function locate(input) {
-      var path = Array.isArray(input) ? input : input.split('/');
-      var selectedNode = this;
-
-      //console.log('Locate: %s', path)
-      path.forEach(function (name) {
-
-        //console.log("Does selected node (%s) have a name of %s? :", selectedNode.name, name, selectedNode.has(name) )
-
-        if (selectedNode.has(name)) {
-
-          // name already there, so just grab that node
-          selectedNode = selectedNode.get(name);
-        } else {
-
-          // create new node
-          selectedNode = null;
-        }
-      });
-
-      return selectedNode;
-    }
-  }, {
-    key: 'make',
-    value: function make(_ref3) {
-      var path = _ref3.path,
-          tags = _ref3.tags;
-
-
-      var selectedNode = this;
-
-      path.forEach(function (name) {
-
-        if (selectedNode.has(name)) {
-          // name already there, so just grab that node
-          selectedNode = selectedNode.get(name);
-        } else {
-          // create new node
-          selectedNode = selectedNode.set(name, new Branch(name, selectedNode));
-        }
-      });
-
-      selectedNode.tag(tags);
-      console.log('Tagged "%s" with %s', selectedNode.name, tags);
-    }
-  }]);
-
-  return Branch;
-}(EventEmitter);
-
-module.exports = Branch;
-
-},{"events":8}],6:[function(require,module,exports){
-'use strict';
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-var Branch = require('./Branch.js');
-
-var Root = function (_Branch) {
-  _inherits(Root, _Branch);
-
-  function Root(name) {
-    _classCallCheck(this, Root);
-
-    return _possibleConstructorReturn(this, (Root.__proto__ || Object.getPrototypeOf(Root)).call(this, 'root'));
-  }
-
-  return Root;
-}(Branch);
-
-module.exports = Root;
-
-},{"./Branch.js":5}],7:[function(require,module,exports){
-'use strict';
-
-var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; }();
-
-// This is a Utility Object like Math or Array
-
-var Root = require('./Root.js');
-var Branch = require('./Branch.js');
-
-var Tree = {
-  decodeMap: function decodeMap(map) {
-    var response = map.split('\n') // turn into lines
-    .map(function (l) {
-      return l.trim().replace(/ +/g, ' ');
-    }) // clean up lines
-    .filter(function (l) {
-      return !l.match(/^ {0,}#/);
-    }) // eliminate comments
-    .filter(function (l) {
-      return l;
-    }) // eliminate empties
-    .map(function (l) {
-      var _l$split = l.split(" "),
-          _l$split2 = _slicedToArray(_l$split, 3),
-          cmd = _l$split2[0],
-          path = _l$split2[1],
-          tags = _l$split2[2];
-
-      return { cmd: cmd, path: path, tags: tags };
-    }) // split cmd/path-string
-    .map(function (o) {
-      o.path = o.path.split("/");o.tags = o.tags ? o.tags.split(",") : [];return o;
-    }); // split path into fragments
-    return response;
-  },
-  importMap: function importMap(tree, map) {
-    map.forEach(function (_ref) {
-      var cmd = _ref.cmd,
-          path = _ref.path,
-          tags = _ref.tags;
-
-      tree[cmd]({ path: path, tags: tags });
-    });
-  },
-  importData: function importData(root, producer) {
-    producer(function (record) {
-      console.log(record);
-      root.pipe(record);
-    });
-  }
-};
-
-module.exports = Tree;
-
-},{"./Branch.js":5,"./Root.js":6}],8:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -1473,4 +1388,4 @@ function functionBindPolyfill(context) {
   };
 }
 
-},{}]},{},[2]);
+},{}]},{},[6]);
