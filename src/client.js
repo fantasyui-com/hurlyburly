@@ -21,6 +21,8 @@ const pookie = require('pookie')(vfs);
 const bogo = require('bogo')(8081);
 const reconciler = require('./reconcile.js');
 
+const dataCommand = require('data-command')();
+
 bogo.on('message', function(message) {
   //console.log('Server Sent: %s', message);
   const name = 'message';
@@ -34,11 +36,22 @@ bogo.on('object', function(object) {
 
 
 $(function() {
-  $('*[data-mount]').each(function(){
-     const node = this;
-     const path = $(node).data('mount');
-     const template = $(node).children(0).clone();
-     $(node).children(0).hide();
+
+
+   const api = {};
+   api.stream = function(node, options){
+     const path = options.source;
+     const template = $(`#${options.template}`).children(0).clone();
      pookie.mount(path, reconciler({node, template}));
-   });
+   }
+
+
+   // general purpose command execution
+   dataCommand.commands().forEach(function({node, commands}){
+     commands.forEach(function(execute){
+       api[execute.command](node, execute)
+     })
+   }); // forEach
+
+
 });
