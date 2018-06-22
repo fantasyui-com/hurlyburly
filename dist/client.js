@@ -614,7 +614,7 @@ module.exports = function(vfs){
     mount: function(path, reconciler){
       const branch = root.locate(path);
       branch.on('data', function(dataList){
-        console.log('Path "%s" got data and is sending it into the reconciler.', path)
+        // console.log('Path "%s" got data and is sending it into the reconciler.', path)
         reconciler(dataList);
       });
     }, // API
