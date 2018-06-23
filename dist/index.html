@@ -2,9 +2,9 @@
 <html lang="en_US">
 
 <head>
+
   <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
   <meta content="utf-8" http-equiv="encoding">
-
   <title>Browser Test</title>
   <script src="https://code.jquery.com/jquery-3.3.1.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
@@ -17,10 +17,9 @@
 
 <body class="bg-dark">
 
-
   <div class="container">
     <div class="row">
-      <div class="col">
+      <div class="col p-3">
 
         <button type="button" class="btn btn-secondary"> <i class="fa fa-plus"></i> </button>
 
@@ -33,16 +32,7 @@
       <div class="col">
 
         <div class="card text-white bg-info shadow">
-
-          <ul data-command="stream -w --source Applications/Todo/Today --template todo-item-template" class="list-group list-group-flush"></ul>
-          <div class="d-none template" id="todo-item-template">
-              <li class="list-group-item bg-info text-white">
-                <span data-variable="text"></span>
-                <span data-variable="version"></span>
-                <span data-variable="name"></span>
-              </li>
-          </div>
-
+          <ul data-command="stream --source Applications/Todo/Today --template todo-item-template --reconciler plain" class="list-group list-group-flush"></ul>
         </div>
 
       </div>
@@ -52,7 +42,12 @@
 
 
 
-
-
-
+<div class="d-none template" id="todo-item-template">
+    <li class="list-group-item bg-info text-white">
+      <span data-variable="uuid"></span>
+      <span data-variable="text"></span>
+      <span data-variable="version"></span>
+      <span data-variable="name"></span>
+    </li>
+</div>
 </html>

@@ -1,25 +1,19 @@
 const vfs = `
 
 # Main Objects
-make Root/Users
-make Root/Docs
-make Root/Messages
 
-# Add Users
-make Root/Users/System
-make Root/Users/Admin
-
-# Messages to display
-make Root/Users/Admin/Messages
-make Root/Users/System/Messages
-
-make Applications/Todo/Today today,todo
+make Applications *
+make Applications/Todo todo
+make Applications/Todo/Today today
 
 `;
 
-const pookie = require('pookie')(vfs);
+const pookie = require('../../pookie')(vfs);
 const bogo = require('bogo')(8081);
-const reconciler = require('./reconcile.js');
+
+const reconcilers = {
+  'plain': require('./reconcile.js')
+}
 
 const dataCommand = require('data-command')();
 
@@ -30,7 +24,14 @@ bogo.on('message', function(message) {
   bogo.emit('reply', {name,data});
 });
 
+bogo.on('control', function(object) {
+  //console.log('bogo got a control packet....', object)
+  if(object.command === 'reload') window.location.reload(true);
+
+});
+
 bogo.on('object', function(object) {
+  //console.log('bogo pipe', object)
   pookie.pipe(object); // insert object into pookie
 });
 
@@ -42,13 +43,16 @@ $(function() {
    api.stream = function(node, options){
      const path = options.source;
      const template = $(`#${options.template}`).children(0).clone();
-     pookie.mount(path, reconciler({node, template}));
+     const reconciler = reconcilers[options.reconciler]({node, template});
+     pookie.mount(path, reconciler);
+
    }
 
 
    // general purpose command execution
    dataCommand.commands().forEach(function({node, commands}){
      commands.forEach(function(execute){
+       //console.log(`Calling ${execute.command}`)
        api[execute.command](node, execute)
      })
    }); // forEach
