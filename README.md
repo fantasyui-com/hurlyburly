@@ -1,6 +1,9 @@
 # hurlyburly
 Todo Application based on the pookie object tree & cuddlemuffin object store.
 
+## User Interface: Template Reconciler Stream
+
+
 ## Notes
 
   - The src directory contains es6 code,
