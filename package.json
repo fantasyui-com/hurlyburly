@@ -27,6 +27,7 @@
     "enbuffer": "^1.3.0",
     "pookie": "^1.28.0",
     "utf-8-validate": "^4.0.2",
+    "uuid": "^3.2.1",
     "ws": "^5.2.1"
   },
   "devDependencies": {

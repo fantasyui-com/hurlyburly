@@ -22,6 +22,8 @@
       <div class="col p-3">
 
         <button data-command="create --on click --index 0" type="button" class="btn btn-secondary"> <i class="fa fa-plus"></i> </button>
+        <button data-command="create --on click --index 0 --uuid aaaa --text &quot;Buy Things&quot;" type="button" class="btn btn-secondary"> <i class="fa fa-flask"></i> </button>
+        <!-- // -->
         <button data-command="clog --on click" type="button" class="btn btn-warning" data-toggle="tooltip" data-placement="bottom" title="Debug: Log Command-Log"> <i class="fa fa-list"></i> </button>
 
       </div>
@@ -45,10 +47,7 @@
 
 <div class="d-none template" id="todo-item-template">
     <li class="list-group-item bg-info text-white">
-      <span data-variable="uuid"></span>
       <span data-variable="text"></span>
-      <span data-variable="version"></span>
-      <span data-variable="name"></span>
     </li>
 </div>
 

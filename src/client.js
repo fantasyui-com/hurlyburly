@@ -1,3 +1,4 @@
+const uuid = require('uuid/v4');
 const path = require('path');
 const fs = require('fs');
 
@@ -38,7 +39,9 @@ $(function() {
   };
 
   command.create = function({node, options}){
-    console.log('Create Action Called:', options)
+    console.log('Create Action Called...:', options);
+    pookie.pipe({uuid:(options.uuid||uuid()), version:1, tags:'todo,today,bork', text:(options.text||"Untitled Task")}); // insert object into pookie
+
   };
 
   command.stream = function({node, options}){
@@ -56,7 +59,7 @@ $(function() {
      if(options.on === 'click'){
        $(node).on('click', function(){
          console.info('COMMAND EXECUTION (via click):', options);
-         command[options.command](node, options)
+         command[options.command]({node, options})
          commandLog.push(options);
        });
      }else{

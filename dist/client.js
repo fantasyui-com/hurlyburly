@@ -581,7 +581,7 @@ function functionBindPolyfill(context) {
 });
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"events":15}],2:[function(require,module,exports){
+},{"events":18}],2:[function(require,module,exports){
 const sizzle = require('sizzle');
 const minimist = require('minimist');
 
@@ -1077,7 +1077,7 @@ class Branch  extends EventEmitter {
 
 module.exports = Branch;
 
-},{"events":15}],8:[function(require,module,exports){
+},{"events":18}],8:[function(require,module,exports){
 
 const Branch = require('./Branch.js');
 
@@ -3403,9 +3403,100 @@ if ( typeof define === "function" && define.amd ) {
 })( window );
 
 },{}],11:[function(require,module,exports){
+/**
+ * Convert array of 16 byte values to UUID string format of the form:
+ * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+ */
+var byteToHex = [];
+for (var i = 0; i < 256; ++i) {
+  byteToHex[i] = (i + 0x100).toString(16).substr(1);
+}
+
+function bytesToUuid(buf, offset) {
+  var i = offset || 0;
+  var bth = byteToHex;
+  return bth[buf[i++]] + bth[buf[i++]] +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] +
+          bth[buf[i++]] + bth[buf[i++]] +
+          bth[buf[i++]] + bth[buf[i++]];
+}
+
+module.exports = bytesToUuid;
+
+},{}],12:[function(require,module,exports){
+// Unique ID creation requires a high quality random # generator.  In the
+// browser this is a little complicated due to unknown quality of Math.random()
+// and inconsistent support for the `crypto` API.  We do the best we can via
+// feature-detection
+
+// getRandomValues needs to be invoked in a context where "this" is a Crypto implementation.
+var getRandomValues = (typeof(crypto) != 'undefined' && crypto.getRandomValues.bind(crypto)) ||
+                      (typeof(msCrypto) != 'undefined' && msCrypto.getRandomValues.bind(msCrypto));
+if (getRandomValues) {
+  // WHATWG crypto RNG - http://wiki.whatwg.org/wiki/Crypto
+  var rnds8 = new Uint8Array(16); // eslint-disable-line no-undef
+
+  module.exports = function whatwgRNG() {
+    getRandomValues(rnds8);
+    return rnds8;
+  };
+} else {
+  // Math.random()-based (RNG)
+  //
+  // If all else fails, use Math.random().  It's fast, but is of unspecified
+  // quality.
+  var rnds = new Array(16);
+
+  module.exports = function mathRNG() {
+    for (var i = 0, r; i < 16; i++) {
+      if ((i & 0x03) === 0) r = Math.random() * 0x100000000;
+      rnds[i] = r >>> ((i & 0x03) << 3) & 0xff;
+    }
+
+    return rnds;
+  };
+}
+
+},{}],13:[function(require,module,exports){
+var rng = require('./lib/rng');
+var bytesToUuid = require('./lib/bytesToUuid');
+
+function v4(options, buf, offset) {
+  var i = buf && offset || 0;
+
+  if (typeof(options) == 'string') {
+    buf = options === 'binary' ? new Array(16) : null;
+    options = null;
+  }
+  options = options || {};
+
+  var rnds = options.random || (options.rng || rng)();
+
+  // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
+  rnds[6] = (rnds[6] & 0x0f) | 0x40;
+  rnds[8] = (rnds[8] & 0x3f) | 0x80;
+
+  // Copy bytes to buffer, if provided
+  if (buf) {
+    for (var ii = 0; ii < 16; ++ii) {
+      buf[i + ii] = rnds[ii];
+    }
+  }
+
+  return buf || bytesToUuid(rnds);
+}
+
+module.exports = v4;
+
+},{"./lib/bytesToUuid":11,"./lib/rng":12}],14:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 
+var uuid = require('uuid/v4');
 var path = require('path');
 
 
@@ -3445,7 +3536,8 @@ $(function () {
     var node = _ref2.node,
         options = _ref2.options;
 
-    console.log('Create Action Called:', options);
+    console.log('Create Action Called...:', options);
+    pookie.pipe({ uuid: options.uuid || uuid(), version: 1, tags: 'todo,today,bork', text: options.text || "Untitled Task" }); // insert object into pookie
   };
 
   command.stream = function (_ref3) {
@@ -3468,7 +3560,7 @@ $(function () {
       if (options.on === 'click') {
         $(node).on('click', function () {
           console.info('COMMAND EXECUTION (via click):', options);
-          command[options.command](node, options);
+          command[options.command]({ node: node, options: options });
           commandLog.push(options);
         });
       } else {
@@ -3484,7 +3576,7 @@ $(function () {
 });
 
 }).call(this,require("buffer").Buffer)
-},{"./reconcile.js":12,"bogo":1,"buffer":14,"data-command":2,"path":17,"pookie":6}],12:[function(require,module,exports){
+},{"./reconcile.js":15,"bogo":1,"buffer":17,"data-command":2,"path":20,"pookie":6,"uuid/v4":13}],15:[function(require,module,exports){
 'use strict';
 
 module.exports = function (_ref) {
@@ -3518,7 +3610,7 @@ module.exports = function (_ref) {
   }; // returned function
 };
 
-},{}],13:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -3671,7 +3763,7 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],14:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -5409,7 +5501,7 @@ function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":13,"ieee754":16}],15:[function(require,module,exports){
+},{"base64-js":16,"ieee754":19}],18:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5934,7 +6026,7 @@ function functionBindPolyfill(context) {
   };
 }
 
-},{}],16:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = (nBytes * 8) - mLen - 1
@@ -6020,7 +6112,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],17:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -6248,7 +6340,7 @@ var substr = 'ab'.substr(-1) === 'b'
 ;
 
 }).call(this,require('_process'))
-},{"_process":18}],18:[function(require,module,exports){
+},{"_process":21}],21:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -6434,4 +6526,4 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}]},{},[11]);
+},{}]},{},[14]);
