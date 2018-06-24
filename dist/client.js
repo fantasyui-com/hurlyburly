@@ -1,4 +1,40 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+module.exports = function (options) {
+
+  const db = new Map();
+  const track = new Map();
+
+  return {
+    set: function (path, object) {
+
+      if (track.has(path)) {} else {
+        track.set(path, new Set());
+      }
+      track.get(path).add(object.uuid);
+
+      if (db.has(object.uuid)) {
+        // Object Exists
+        if (object.version > db.get(object.uuid).version) {
+          // Incoming has an older version
+          db.set(object.uuid, object);
+          return true; // a change has occured in the dataset
+        }
+      } else {
+        // First-time Storage
+        db.set(object.uuid, object);
+        return true; // a change has occured in the dataset
+      }
+    },
+    get: function (uuid) {
+      return db.get(uuid);
+    },
+    all: function (path) {
+      return track.has(path) ? Array.from(track.get(path)).map(id => db.get(id)) : [];
+    }
+  };
+};
+
+},{}],2:[function(require,module,exports){
 (function (global){
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.bogo = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 'use strict';
@@ -581,7 +617,7 @@ function functionBindPolyfill(context) {
 });
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"events":12}],2:[function(require,module,exports){
+},{"events":13}],3:[function(require,module,exports){
 const sizzle = require('sizzle');
 const minimist = require('minimist');
 
@@ -632,7 +668,7 @@ module.exports = function(options){
 
 }
 
-},{"minimist":3,"sizzle":4}],3:[function(require,module,exports){
+},{"minimist":4,"sizzle":5}],4:[function(require,module,exports){
 module.exports = function (args, opts) {
     if (!opts) opts = {};
     
@@ -870,7 +906,7 @@ function isNumber (x) {
 }
 
 
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 /*!
  * Sizzle CSS Selector Engine v2.3.3
  * https://sizzlejs.com/
@@ -3144,10 +3180,12 @@ if ( typeof define === "function" && define.amd ) {
 
 })( window );
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 'use strict';
 
 var vfs = '\n\n# Main Objects\n\nmake Applications *\nmake Applications/Todo todo\nmake Applications/Todo/Today today\n\n';
+
+var commandLog = [];
 
 var pookie = require('../../pookie')(vfs);
 var bogo = require('bogo')(8081);
@@ -3177,8 +3215,17 @@ bogo.on('object', function (object) {
 
 $(function () {
 
-  var api = {};
-  api.stream = function (node, options) {
+  var command = {};
+
+  command.clog = function (node, options) {
+    console.dir(commandLog);
+  };
+
+  command.create = function (node, options) {
+    console.log('Create Action:', options);
+  };
+
+  command.stream = function (node, options) {
     var path = options.source;
     var template = $('#' + options.template).children(0).clone();
     var reconciler = reconcilers[options.reconciler]({ node: node, template: template });
@@ -3190,15 +3237,25 @@ $(function () {
     var node = _ref.node,
         commands = _ref.commands;
 
-    commands.forEach(function (execute) {
-      //console.log(`Calling ${execute.command}`)
-      api[execute.command](node, execute);
+    commands.forEach(function (options) {
+      if (options.on === 'click') {
+        $(node).on('click', function () {
+          console.info('COMMAND:', options);
+          command[options.command](node, options);
+          commandLog.push(options);
+        });
+      } else {
+        // Instant execution
+        console.info('COMMAND:', options);
+        command[options.command](node, options);
+        commandLog.push(options);
+      }
     });
   }); // forEach
 
 });
 
-},{"../../pookie":8,"./reconcile.js":6,"bogo":1,"data-command":2}],6:[function(require,module,exports){
+},{"../../pookie":9,"./reconcile.js":7,"bogo":2,"data-command":3}],7:[function(require,module,exports){
 'use strict';
 
 module.exports = function (_ref) {
@@ -3232,7 +3289,7 @@ module.exports = function (_ref) {
   }; // returned function
 };
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 'use strict';
 
 var Tree = require('./lib/Tree.js');
@@ -3241,8 +3298,10 @@ var Branch = require('./lib/Branch.js');
 
 module.exports = { Tree: Tree, Root: Root, Branch: Branch };
 
-},{"./lib/Branch.js":9,"./lib/Root.js":10,"./lib/Tree.js":11}],8:[function(require,module,exports){
+},{"./lib/Branch.js":10,"./lib/Root.js":11,"./lib/Tree.js":12}],9:[function(require,module,exports){
 'use strict';
+
+var enbuffer = require('../enbuffer')();
 
 var _require = require('./core.js'),
     Tree = _require.Tree,
@@ -3276,9 +3335,13 @@ module.exports = function (vfs) {
 
     mount: function mount(path, reconciler) {
       var branch = root.locate(path);
-      branch.on('data', function (dataList) {
-        // console.log('Path "%s" got data and is sending it into the reconciler.', path)
-        reconciler(dataList);
+      // branch.on('data', function(dataList){
+      //   // console.log('Path "%s" got data and is sending it into the reconciler.', path)
+      //   reconciler(dataList);
+      // });
+
+      branch.on('object', function (object) {
+        if (enbuffer.set(path, object)) reconciler(enbuffer.all(path));
       });
     }, // API
 
@@ -3290,7 +3353,7 @@ module.exports = function (vfs) {
   };
 }; // main
 
-},{"./core.js":7}],9:[function(require,module,exports){
+},{"../enbuffer":1,"./core.js":8}],10:[function(require,module,exports){
 'use strict';
 
 var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; }();
@@ -3319,7 +3382,6 @@ var Branch = function (_EventEmitter) {
     _this.parent = parent;
 
     _this.children = new Map();
-    _this.content = new Map();
 
     _this.tags = new Set();
     return _this;
@@ -3349,7 +3411,6 @@ var Branch = function (_EventEmitter) {
       if (this.tags.has('*')) {
         return true;
       }
-
       var tags = Array.isArray(input) ? input : input.split(/,| /);
       var match = false;
       tags.forEach(function (tag) {
@@ -3366,10 +3427,6 @@ var Branch = function (_EventEmitter) {
         // the object shares some tags with this branch,
         // this means information can be passed down
         this.emit('object', object);
-        // TODO: this can be optimized by checking if object exists, and checking version numbers
-        this.content.set(object.uuid, object);
-        this.emit('data', this.content);
-        // Because we share tags, pass the object on, not all of these pipes will be interested, but some may.
         var _iteratorNormalCompletion = true;
         var _didIteratorError = false;
         var _iteratorError = undefined;
@@ -3467,7 +3524,7 @@ var Branch = function (_EventEmitter) {
 
 module.exports = Branch;
 
-},{"events":12}],10:[function(require,module,exports){
+},{"events":13}],11:[function(require,module,exports){
 'use strict';
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -3495,7 +3552,7 @@ var Root = function (_Branch) {
 
 module.exports = Root;
 
-},{"./Branch.js":9}],11:[function(require,module,exports){
+},{"./Branch.js":10}],12:[function(require,module,exports){
 'use strict';
 
 var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; }();
@@ -3558,7 +3615,7 @@ var Tree = {
 
 module.exports = Tree;
 
-},{"./Branch.js":9,"./Root.js":10}],12:[function(require,module,exports){
+},{"./Branch.js":10,"./Root.js":11}],13:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4083,4 +4140,4 @@ function functionBindPolyfill(context) {
   };
 }
 
-},{}]},{},[5]);
+},{}]},{},[6]);

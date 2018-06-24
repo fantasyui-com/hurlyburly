@@ -8,6 +8,8 @@ make Applications/Todo/Today today
 
 `;
 
+const commandLog = [];
+
 const pookie = require('../../pookie')(vfs);
 const bogo = require('bogo')(8081);
 
@@ -39,23 +41,43 @@ bogo.on('object', function(object) {
 $(function() {
 
 
-   const api = {};
-   api.stream = function(node, options){
-     const path = options.source;
-     const template = $(`#${options.template}`).children(0).clone();
-     const reconciler = reconcilers[options.reconciler]({node, template});
-     pookie.mount(path, reconciler);
 
-   }
+  const command = {};
 
+  command.clog = function(node, options){
+    console.dir(commandLog);
+  };
 
-   // general purpose command execution
-   dataCommand.commands().forEach(function({node, commands}){
-     commands.forEach(function(execute){
-       //console.log(`Calling ${execute.command}`)
-       api[execute.command](node, execute)
-     })
-   }); // forEach
+  command.create = function(node, options){
+    console.log('Create Action:', options)
+  };
+
+  command.stream = function(node, options){
+   const path = options.source;
+   const template = $(`#${options.template}`).children(0).clone();
+   const reconciler = reconcilers[options.reconciler]({node, template});
+   pookie.mount(path, reconciler);
+  }
+
+  // general purpose command execution
+  dataCommand.commands().forEach(function({node, commands}){
+   commands.forEach(function(options){
+     if(options.on === 'click'){
+       $(node).on('click', function(){
+         console.info('COMMAND:', options);
+         command[options.command](node, options)
+         commandLog.push(options);
+
+       });
+     }else{
+       // Instant execution
+       console.info('COMMAND:', options);
+       command[options.command](node, options)
+       commandLog.push(options);
+
+     }
+   })
+  }); // forEach
 
 
 });

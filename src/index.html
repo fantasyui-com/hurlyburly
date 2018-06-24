@@ -21,7 +21,8 @@
     <div class="row">
       <div class="col p-3">
 
-        <button type="button" class="btn btn-secondary"> <i class="fa fa-plus"></i> </button>
+        <button data-command="create --on click --index 0" type="button" class="btn btn-secondary"> <i class="fa fa-plus"></i> </button>
+        <button data-command="clog --on click" type="button" class="btn btn-warning" data-toggle="tooltip" data-placement="bottom" title="Debug: Log Command-Log"> <i class="fa fa-list"></i> </button>
 
       </div>
     </div>
@@ -50,4 +51,12 @@
       <span data-variable="name"></span>
     </li>
 </div>
+
+</body>
+
+<script>
+$(function () {
+  $('[data-toggle="tooltip"]').tooltip()
+})
+</script>
 </html>
