@@ -3,7 +3,12 @@ const path = require('path');
 
 const WebSocket = require('ws');
 
+// TODO: Wrap object handeling in Specialized Emitter to escape data: envelope.data madness
+// TODO: Employ https://github.com/fantasyui-com/cuddlemuffin for data storage
+
 const wss = new WebSocket.Server({ port: 8081 });
+
+
 
 wss.on('connection', function connection(ws) {
 
