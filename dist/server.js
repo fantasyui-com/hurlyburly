@@ -7,8 +7,21 @@ const wss = new WebSocket.Server({ port: 8081 });
 
 wss.on('connection', function connection(ws) {
 
-  ws.on('message', function incoming(message) {
-    console.log('server received: %s', message);
+  ws.on('message', function incoming(data) {
+
+    const envelope = JSON.parse(data);
+
+    if(envelope.type === 'storage'){
+      console.log('server received envelope of type: %s', envelope.type);
+      console.log('%s holds data', envelope.type, envelope.data);
+
+      ws.send( JSON.stringify ( { name:'object', data: envelope.data } ) );
+
+    }else{
+      console.log('server received', envelope);
+
+    }
+
   });
 
   const target = path.resolve('./dist/index.html');

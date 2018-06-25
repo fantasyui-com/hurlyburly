@@ -3536,8 +3536,18 @@ $(function () {
     var node = _ref2.node,
         options = _ref2.options;
 
-    console.log('Create Action Called...:', options);
-    pookie.pipe({ uuid: options.uuid || uuid(), version: 1, tags: 'todo,today,bork', text: options.text || "Untitled Task" }); // insert object into pookie
+
+    var task = {
+      uuid: options.uuid || uuid(),
+      version: 1,
+      tags: 'todo,today,bork',
+      text: options.text || "Untitled Task"
+    };
+
+    console.log('Create Action Called...:', options, task);
+    // pookie.pipe(task); // insert object into pookie
+
+    bogo.emit('reply', { type: 'storage', data: task });
   };
 
   command.stream = function (_ref3) {
