@@ -581,7 +581,7 @@ function functionBindPolyfill(context) {
 });
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"events":18}],2:[function(require,module,exports){
+},{"events":19}],2:[function(require,module,exports){
 const sizzle = require('sizzle');
 const minimist = require('minimist');
 
@@ -632,7 +632,7 @@ module.exports = function(options){
 
 }
 
-},{"minimist":3,"sizzle":10}],3:[function(require,module,exports){
+},{"minimist":3,"sizzle":11}],3:[function(require,module,exports){
 module.exports = function (args, opts) {
     if (!opts) opts = {};
     
@@ -909,6 +909,30 @@ module.exports = function(options){
 }
 
 },{}],5:[function(require,module,exports){
+module.exports = function(options){
+
+  const db = [];
+
+  const log = function(command){
+
+    if(command) db.push(command);
+
+    return db;
+
+  }
+
+  const replay = function(log, commands, data){
+
+  }
+
+  return {
+    log,
+    replay,
+  }
+
+}
+
+},{}],6:[function(require,module,exports){
 
 const Tree = require('./lib/Tree.js')
 const Root = require('./lib/Root.js')
@@ -916,7 +940,7 @@ const Branch = require('./lib/Branch.js')
 
 module.exports = {Tree, Root, Branch};
 
-},{"./lib/Branch.js":7,"./lib/Root.js":8,"./lib/Tree.js":9}],6:[function(require,module,exports){
+},{"./lib/Branch.js":8,"./lib/Root.js":9,"./lib/Tree.js":10}],7:[function(require,module,exports){
 const enbuffer = require('../enbuffer')();
 
 const {Tree, Root, Branch} = require('./core.js');
@@ -967,7 +991,7 @@ module.exports = function(vfs){
   } // return object
 } // main
 
-},{"../enbuffer":4,"./core.js":5}],7:[function(require,module,exports){
+},{"../enbuffer":4,"./core.js":6}],8:[function(require,module,exports){
 const EventEmitter = require('events');
 
 class Branch  extends EventEmitter {
@@ -1077,7 +1101,7 @@ class Branch  extends EventEmitter {
 
 module.exports = Branch;
 
-},{"events":18}],8:[function(require,module,exports){
+},{"events":19}],9:[function(require,module,exports){
 
 const Branch = require('./Branch.js');
 
@@ -1090,7 +1114,7 @@ class Root extends Branch {
 
 module.exports = Root;
 
-},{"./Branch.js":7}],9:[function(require,module,exports){
+},{"./Branch.js":8}],10:[function(require,module,exports){
 // This is a Utility Object like Math or Array
 
 const Root = require('./Root.js');
@@ -1128,7 +1152,7 @@ const Tree = {
 
 module.exports = Tree;
 
-},{"./Branch.js":7,"./Root.js":8}],10:[function(require,module,exports){
+},{"./Branch.js":8,"./Root.js":9}],11:[function(require,module,exports){
 /*!
  * Sizzle CSS Selector Engine v2.3.3
  * https://sizzlejs.com/
@@ -3402,7 +3426,7 @@ if ( typeof define === "function" && define.amd ) {
 
 })( window );
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /**
  * Convert array of 16 byte values to UUID string format of the form:
  * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
@@ -3427,7 +3451,7 @@ function bytesToUuid(buf, offset) {
 
 module.exports = bytesToUuid;
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 // Unique ID creation requires a high quality random # generator.  In the
 // browser this is a little complicated due to unknown quality of Math.random()
 // and inconsistent support for the `crypto` API.  We do the best we can via
@@ -3461,7 +3485,7 @@ if (getRandomValues) {
   };
 }
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 var rng = require('./lib/rng');
 var bytesToUuid = require('./lib/bytesToUuid');
 
@@ -3492,7 +3516,7 @@ function v4(options, buf, offset) {
 
 module.exports = v4;
 
-},{"./lib/bytesToUuid":11,"./lib/rng":12}],14:[function(require,module,exports){
+},{"./lib/bytesToUuid":12,"./lib/rng":13}],15:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 
@@ -3502,11 +3526,11 @@ var path = require('path');
 
 var vfs = Buffer("IyBNYWluIE9iamVjdHMKCm1ha2UgQXBwbGljYXRpb25zICoKbWFrZSBBcHBsaWNhdGlvbnMvVG9kbyB0b2RvCm1ha2UgQXBwbGljYXRpb25zL1RvZG8vVG9kYXkgdG9kYXkK","base64").toString();
 var pookie = require('pookie')(vfs);
+var ensign = require('ensign')({});
 
 var bogo = require('bogo')(8081);
 var dataCommand = require('data-command')();
 
-var commandLog = [];
 var reconcilers = {
   'plain': require('./reconcile.js')
 };
@@ -3529,7 +3553,7 @@ $(function () {
     var node = _ref.node,
         options = _ref.options;
 
-    console.dir(commandLog);
+    console.dir(ensign.log());
   };
 
   command.create = function (_ref2) {
@@ -3566,18 +3590,19 @@ $(function () {
     var node = _ref4.node,
         commands = _ref4.commands;
 
-    commands.forEach(function (options) {
-      if (options.on === 'click') {
+
+    commands.forEach(function (setup) {
+      if (setup.on === 'click') {
         $(node).on('click', function () {
-          console.info('COMMAND EXECUTION (via click):', options);
-          command[options.command]({ node: node, options: options });
-          commandLog.push(options);
+          console.info('COMMAND EXECUTION (via click):', setup);
+          command[setup.command]({ node: node, options: setup });
+          ensign.log(setup);
         });
       } else {
         // Instant execution
-        console.info('COMMAND:', options);
-        command[options.command]({ node: node, options: options });
-        commandLog.push(options);
+        console.info('COMMAND:', setup);
+        command[setup.command]({ node: node, options: setup });
+        ensign.log(setup);
       }
     });
   }); // forEach
@@ -3586,7 +3611,7 @@ $(function () {
 });
 
 }).call(this,require("buffer").Buffer)
-},{"./reconcile.js":15,"bogo":1,"buffer":17,"data-command":2,"path":20,"pookie":6,"uuid/v4":13}],15:[function(require,module,exports){
+},{"./reconcile.js":16,"bogo":1,"buffer":18,"data-command":2,"ensign":5,"path":21,"pookie":7,"uuid/v4":14}],16:[function(require,module,exports){
 'use strict';
 
 module.exports = function (_ref) {
@@ -3620,7 +3645,7 @@ module.exports = function (_ref) {
   }; // returned function
 };
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -3773,7 +3798,7 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -5511,7 +5536,7 @@ function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":16,"ieee754":19}],18:[function(require,module,exports){
+},{"base64-js":17,"ieee754":20}],19:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -6036,7 +6061,7 @@ function functionBindPolyfill(context) {
   };
 }
 
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = (nBytes * 8) - mLen - 1
@@ -6122,7 +6147,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],20:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -6350,7 +6375,7 @@ var substr = 'ab'.substr(-1) === 'b'
 ;
 
 }).call(this,require('_process'))
-},{"_process":21}],21:[function(require,module,exports){
+},{"_process":22}],22:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -6536,4 +6561,4 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}]},{},[14]);
+},{}]},{},[15]);

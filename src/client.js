@@ -4,11 +4,11 @@ const fs = require('fs');
 
 const vfs = fs.readFileSync( path.join(__dirname, '..', 'vfs.txt') ).toString();
 const pookie = require('pookie')(vfs);
+const ensign = require('ensign')({});
 
 const bogo = require('bogo')(8081);
 const dataCommand = require('data-command')();
 
-const commandLog = [];
 const reconcilers = {
   'plain': require('./reconcile.js')
 }
@@ -35,7 +35,7 @@ $(function() {
   const command = {};
 
   command.clog = function({node, options}){
-    console.dir(commandLog);
+    console.dir(ensign.log());
   };
 
   command.create = function({node, options}){
@@ -65,20 +65,22 @@ $(function() {
   // DATA-COMMAND BOOTSTRAP
   // general purpose command execution
   dataCommand.commands().forEach(function({node, commands}){
-   commands.forEach(function(options){
-     if(options.on === 'click'){
+
+   commands.forEach(function(setup){
+     if(setup.on === 'click'){
        $(node).on('click', function(){
-         console.info('COMMAND EXECUTION (via click):', options);
-         command[options.command]({node, options})
-         commandLog.push(options);
+         console.info('COMMAND EXECUTION (via click):', setup);
+         command[setup.command]({node, options:setup})
+         ensign.log(setup)
        });
      }else{
        // Instant execution
-       console.info('COMMAND:', options);
-       command[options.command]({node, options})
-       commandLog.push(options);
+       console.info('COMMAND:', setup);
+       command[setup.command]({node, options:setup})
+       ensign.log(setup)
      }
    })
+
   }); // forEach
   // DATA-COMMAND
 
