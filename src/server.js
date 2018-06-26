@@ -1,6 +1,8 @@
 const chokidar = require('chokidar');
 const path = require('path');
 
+const retry = require('retry');
+
 const WebSocket = require('ws');
 
 // TODO: Wrap object handeling in Specialized Emitter to escape data: envelope.data madness
@@ -8,63 +10,71 @@ const WebSocket = require('ws');
 
 const wss = new WebSocket.Server({ port: 8081 });
 
+const EventEmitter = require('events');
+class Transfusion extends EventEmitter {}
+const transfusion = new Transfusion();
 
 
-wss.on('connection', function connection(ws) {
+wss.on('connection', function connection(socket) {
 
-  ws.on('message', function incoming(data) {
+  transfusion.on('client.storage', (object) => {
+    transfusion.emit('send', {name:'object', data: object });
+  });
 
-    const envelope = JSON.parse(data);
+  transfusion.on('send.object', (object) => {
+    transfusion.emit('send', {name:'object', data: object });
+  })
 
-    if(envelope.type === 'storage'){
-      console.log('server received envelope of type: %s', envelope.type);
-      console.log('%s holds data', envelope.type, envelope.data);
+  transfusion.on('send', (object) => {
+    // const encoded = JSON.stringify(object);
+    // var operation = retry.operation();
+    // operation.attempt(function(currentAttempt) {
+    //   if(currentAttempt>1)console.error(`Sending object resulted in an error, rety #${currentAttempt}: ${operation.mainError()}`)
+    //
+    //   try{
+    //     if(socket.readyState == 1) {
+    //       socket.send(encoded);
+    //      }else{
+    //       throw new Error(`readyState error`+ JSON.stringify(object))
+    //     }
+    //   }catch(e){
+    //     //console.log(e)
+    //     operation.retry(e);
+    //   }
+    //
+    // });
+  });
 
-      ws.send( JSON.stringify ( { name:'object', data: envelope.data } ) );
+  transfusion.emit('client.connection', {socket});
 
-    }else{
-      console.log('server received', envelope);
+  socket.on('message', function incoming(data) {
+    //console.log('Got message', data);
+    transfusion.emit('client.message', data);
+  });
 
+  socket.on('message', function incoming(data) {
+    try{
+      const envelope = JSON.parse(data);
+      transfusion.emit('client.envelope', envelope);
+
+      if(envelope.type) {
+        // console.log('Got envelope of type [%s]', envelope.type);
+        transfusion.emit(`client.${envelope.type}`, envelope.data);
+      }
+
+    }catch(e){
+      console.error(e)
     }
-
   });
 
-  const target = path.resolve('./dist/index.html');
-  console.log("watching: %s", target);
+})
 
-  const watcher = chokidar.watch(target, { persistent: true });
+transfusion.on('client.connection', ({socket}) => {
 
-  watcher.on('change', function(path) {
-    console.log('path changed: %s', path);
-    if(ws.readyState == 1) {
-      ws.send(JSON.stringify({ name:'control', data:{command:'reload'} }));
-    }
-  });
-  watcher.on('change', (path, stats) => {
-  if (stats) console.log(`File ${path} changed size to ${stats.size}`);
-  });
-
-  if(ws.readyState == 1) ws.send(JSON.stringify({name:'message', data:'Bueno Loco!'}));
+  transfusion.emit('send.object', {uuid:'aaf', version:1, tags:'todo,today,bork', text:"Buy Milk!"});
 
   setInterval(function(){
+    transfusion.emit('send', {name:'object', data: {uuid:'aag', version:1, tags:'todo,today,bork', text:"Buy Socks!"} });
+  }, 1000);
 
-    try{
-      if(ws.readyState == 1) ws.send(JSON.stringify({name:'message', data:'something!'}));
-    }catch(e){
-      //console.log(e)
-    }
-
-  }, 5000);
-
-  if(ws.readyState == 1) ws.send(JSON.stringify({name:'object', data: {uuid:'aaf', version:1, tags:'todo,today,bork', text:"Buy Milk!"} }));
-  setInterval(function(){
-
-    try{
-      if(ws.readyState == 1) ws.send(JSON.stringify({name:'object', data: {uuid:'aag', version:1, tags:'todo,today,bork', text:"Buy Socks!"} }));
-    }catch(e){
-      //console.log(e)
-    }
-
-  }, 2000);
-
-});
+})

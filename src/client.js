@@ -1,3 +1,4 @@
+/// standard boilerplate with ecosystem components
 const uuid = require('uuid/v4');
 const path = require('path');
 const fs = require('fs');
@@ -14,75 +15,82 @@ const reconcilers = {
 }
 
 
-bogo
-    .on('message', function(message) {
-      const name = 'message';
-      const data = 'Hello from Client';
-      bogo.emit('reply', {name,data});
-    })
-    .on('control', function(object) {
-      if(object.command === 'reload') window.location.reload(true);
-    })
-    .on('object', function(object) {
-      pookie.pipe(object); // insert object into pookie
-    });
+/// Prepare node's standard emitter
+/// and create the transfusion system
 
+const EventEmitter = require('events');
+class Transfusion extends EventEmitter {}
+const transfusion = new Transfusion();
 
-$(function() {
+transfusion.on('send', (object) => {
+  bogo.emit('reply', object);
+});
 
+transfusion.on('server.control', (object) => {
+  if(object.command === 'reload') window.location.reload(true);
+});
 
+transfusion.on('server.object', (object) => {
+  pookie.pipe(object); // insert object into pookie
+});
 
-  const command = {};
+/// Register Commands
 
-  command.clog = function({node, options}){
-    console.dir(ensign.log());
+transfusion.on('command.clog', ({node, options}) => {
+  console.dir(ensign.log());
+});
+
+transfusion.on('command.create', ({node, options}) => {
+  const task = {
+    uuid: options.uuid || uuid(),
+    version:1,
+    tags:'todo,today,bork',
+    text: options.text || "Untitled Task"
   };
+  console.log('Create Action Called...:', options, task);
+  transfusion.emit('send', {type:'storage', data:task});
+});
 
-  command.create = function({node, options}){
+transfusion.on('command.stream', ({node, options}) => {
+  const path = options.source;
+  const template = $(`#${options.template}`).children(0).clone();
+  const reconciler = reconcilers[options.reconciler]({node, template});
+  pookie.mount(path, reconciler);
+});
 
-    const task = {
-      uuid: options.uuid || uuid(),
-      version:1,
-      tags:'todo,today,bork',
-      text: options.text || "Untitled Task"
-    };
+/// Flow Preparations
 
-    console.log('Create Action Called...:', options, task);
-    // pookie.pipe(task); // insert object into pookie
+transfusion.on('install.commands', (object) => {
 
-    bogo.emit('reply', {type:'storage',data:task});
-
-  };
-
-  command.stream = function({node, options}){
-   const path = options.source;
-   const template = $(`#${options.template}`).children(0).clone();
-   const reconciler = reconcilers[options.reconciler]({node, template});
-   pookie.mount(path, reconciler);
-  }
-
-
-  // DATA-COMMAND BOOTSTRAP
-  // general purpose command execution
   dataCommand.commands().forEach(function({node, commands}){
-
    commands.forEach(function(setup){
      if(setup.on === 'click'){
        $(node).on('click', function(){
          console.info('COMMAND EXECUTION (via click):', setup);
-         command[setup.command]({node, options:setup})
+         transfusion.emit(`command.${setup.command}`, {node, options:setup});
          ensign.log(setup)
        });
      }else{
        // Instant execution
        console.info('COMMAND:', setup);
-       command[setup.command]({node, options:setup})
+       transfusion.emit(`command.${setup.command}`, {node, options:setup});
        ensign.log(setup)
      }
    })
-
   }); // forEach
-  // DATA-COMMAND
 
+  /// bogo to transfusion proxy (for uniformity)
+  bogo.on('control', function(object) { transfusion.emit('server.control', object); })
+  bogo.on('object', function(object) { transfusion.emit('server.object', object); });
 
+});
+
+transfusion.on('dom.ready', (object) => {
+  transfusion.emit('install.commands');
+});
+
+/// Boot Transfusion
+
+$(function() {
+  transfusion.emit('dom.ready');
 });

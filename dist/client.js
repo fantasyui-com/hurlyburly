@@ -3520,6 +3520,13 @@ module.exports = v4;
 (function (Buffer){
 'use strict';
 
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
+
+/// standard boilerplate with ecosystem components
 var uuid = require('uuid/v4');
 var path = require('path');
 
@@ -3533,85 +3540,116 @@ var dataCommand = require('data-command')();
 
 var reconcilers = {
   'plain': require('./reconcile.js')
-};
 
-bogo.on('message', function (message) {
-  var name = 'message';
-  var data = 'Hello from Client';
-  bogo.emit('reply', { name: name, data: data });
-}).on('control', function (object) {
+  /// Prepare node's standard emitter
+  /// and create the transfusion system
+
+};var EventEmitter = require('events');
+
+var Transfusion = function (_EventEmitter) {
+  _inherits(Transfusion, _EventEmitter);
+
+  function Transfusion() {
+    _classCallCheck(this, Transfusion);
+
+    return _possibleConstructorReturn(this, (Transfusion.__proto__ || Object.getPrototypeOf(Transfusion)).apply(this, arguments));
+  }
+
+  return Transfusion;
+}(EventEmitter);
+
+var transfusion = new Transfusion();
+
+transfusion.on('send', function (object) {
+  bogo.emit('reply', object);
+});
+
+transfusion.on('server.control', function (object) {
   if (object.command === 'reload') window.location.reload(true);
-}).on('object', function (object) {
+});
+
+transfusion.on('server.object', function (object) {
   pookie.pipe(object); // insert object into pookie
 });
 
-$(function () {
+/// Register Commands
 
-  var command = {};
+transfusion.on('command.clog', function (_ref) {
+  var node = _ref.node,
+      options = _ref.options;
 
-  command.clog = function (_ref) {
-    var node = _ref.node,
-        options = _ref.options;
+  console.dir(ensign.log());
+});
 
-    console.dir(ensign.log());
+transfusion.on('command.create', function (_ref2) {
+  var node = _ref2.node,
+      options = _ref2.options;
+
+  var task = {
+    uuid: options.uuid || uuid(),
+    version: 1,
+    tags: 'todo,today,bork',
+    text: options.text || "Untitled Task"
   };
+  console.log('Create Action Called...:', options, task);
+  transfusion.emit('send', { type: 'storage', data: task });
+});
 
-  command.create = function (_ref2) {
-    var node = _ref2.node,
-        options = _ref2.options;
+transfusion.on('command.stream', function (_ref3) {
+  var node = _ref3.node,
+      options = _ref3.options;
 
+  var path = options.source;
+  var template = $('#' + options.template).children(0).clone();
+  var reconciler = reconcilers[options.reconciler]({ node: node, template: template });
+  pookie.mount(path, reconciler);
+});
 
-    var task = {
-      uuid: options.uuid || uuid(),
-      version: 1,
-      tags: 'todo,today,bork',
-      text: options.text || "Untitled Task"
-    };
+/// Flow Preparations
 
-    console.log('Create Action Called...:', options, task);
-    // pookie.pipe(task); // insert object into pookie
+transfusion.on('install.commands', function (object) {
 
-    bogo.emit('reply', { type: 'storage', data: task });
-  };
-
-  command.stream = function (_ref3) {
-    var node = _ref3.node,
-        options = _ref3.options;
-
-    var path = options.source;
-    var template = $('#' + options.template).children(0).clone();
-    var reconciler = reconcilers[options.reconciler]({ node: node, template: template });
-    pookie.mount(path, reconciler);
-  };
-
-  // DATA-COMMAND BOOTSTRAP
-  // general purpose command execution
   dataCommand.commands().forEach(function (_ref4) {
     var node = _ref4.node,
         commands = _ref4.commands;
-
 
     commands.forEach(function (setup) {
       if (setup.on === 'click') {
         $(node).on('click', function () {
           console.info('COMMAND EXECUTION (via click):', setup);
-          command[setup.command]({ node: node, options: setup });
+          transfusion.emit('command.' + setup.command, { node: node, options: setup });
           ensign.log(setup);
         });
       } else {
         // Instant execution
         console.info('COMMAND:', setup);
-        command[setup.command]({ node: node, options: setup });
+        transfusion.emit('command.' + setup.command, { node: node, options: setup });
         ensign.log(setup);
       }
     });
   }); // forEach
-  // DATA-COMMAND
 
+  /// bogo to transfusion proxy (for uniformity)
+  bogo.on('control', function (object) {
+    transfusion.emit('server.control', object);
+  });
+  bogo.on('object', function (object) {
+    transfusion.emit('server.object', object);
+  });
+});
+
+transfusion.on('dom.ready', function (object) {
+  transfusion.emit('install.commands');
+});
+
+/// Boot Transfusion
+
+$(function () {
+  transfusion.emit('dom.ready');
 });
 
 }).call(this,require("buffer").Buffer)
-},{"./reconcile.js":16,"bogo":1,"buffer":18,"data-command":2,"ensign":5,"path":21,"pookie":7,"uuid/v4":14}],16:[function(require,module,exports){
+},{"./reconcile.js":16,"bogo":1,"buffer":18,"data-command":2,"ensign":5,"events":19,"path":21,"pookie":7,"uuid/v4":14}],16:[function(require,module,exports){
 'use strict';
 
 module.exports = function (_ref) {
