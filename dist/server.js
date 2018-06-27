@@ -1,3 +1,4 @@
+console.info(`[RE]STARTING: ${__filename}`)
 require('fs').watch( __filename, () => process.exit(0) );
 
 const fs = require('fs');
@@ -7,11 +8,12 @@ const chokidar = require('chokidar');
 const path = require('path');
 const uuid = require('uuid/v4');
 
+const cuddlemuffin = require('cuddlemuffin')();
+
 // const retry = require('retry');
 
 const Retry = require('retry-again');
 const WebSocket = require('ws');
-
 
 const WebSocketStates = {
   'CONNECTING': 0, //	The connection is not yet open.
@@ -19,7 +21,6 @@ const WebSocketStates = {
   'CLOSING': 2, //	The connection is in the process of closing.
   'CLOSED': 3, //	The connection is closed.
 };
-
 
 // TODO: Wrap object handeling in Specialized Emitter to escape data: envelope.data madness
 // TODO: Employ https://github.com/fantasyui-com/cuddlemuffin for data storage
@@ -47,16 +48,7 @@ class Transfusion extends EventEmitter {
   }
 }
 
-
-
-
-
-
-
-
-
 const interval = setInterval(function ping() {
-
   wss.clients.forEach(function each(ws) {
     if (ws.isAlive === false) {
       ws.terminate();
@@ -70,26 +62,27 @@ const interval = setInterval(function ping() {
 wss.on('connection', function connection(socket) {
 
   // must be set before transfusion is initialized
+  socket.session = 'session-'+uuid();
   socket.isAlive = true;
   socket.on('pong', function(){this.isAlive = true;});
+  console.log(`\n\n${socket.session}: NEW SESSION!`);
 
   const transfusion = new Transfusion({socket});
-
-  socket.session = 'session-'+uuid();
-  console.log(`\n\n${socket.session}: NEW SESSION!`);
 
   socket.on('close', function(code, reason){
     console.log(`${socket.session}: GOT CLOSE: %s, %s`, code, reason)
     if(!transfusion.disposed) transfusion.dispose();
   })
+
   socket.on('error', function(e){
     console.log(`${socket.session}: GOT ERROR`,e)
     if(!transfusion.disposed) transfusion.dispose();
   })
 
-
-  transfusion.on('client.storage', (object) => {
-    transfusion.emit('send', {name:'object', data: object });
+  transfusion.on('client.storage', async (object) => {
+    await cuddlemuffin.set(object);
+    const stored = await cuddlemuffin.get(object.uuid);
+    transfusion.emit('send.object', stored);
   });
 
   transfusion.on('send.object', (object) => {
@@ -97,8 +90,6 @@ wss.on('connection', function connection(socket) {
   })
 
   transfusion.on('send', (object) => {
-
-    WebSocketStates
 
       if ( (socket.readyState == WebSocketStates.CONNECTING) || (socket.readyState == WebSocketStates.OPEN) ) {
 
@@ -149,8 +140,7 @@ wss.on('connection', function connection(socket) {
   });
 
   transfusion.emit('send.object', {uuid:'aaf', version:1, tags:'todo,today,bork', text:"Buy Milk!"});
+
   transfusion.emit('send', {name:'object', data: {uuid:'aag', version:1, tags:'todo,today,bork', text:"Buy Socks!"} });
 
 })
-
-console.info('READY')

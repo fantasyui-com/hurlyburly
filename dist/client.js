@@ -1,63 +1,43 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
-'use strict';
+const EventEmitter = require('events');
 
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-var EventEmitter = require('events');
-
-module.exports = function (_ref) {
-  var _ref$port = _ref.port,
-      port = _ref$port === undefined ? 8081 : _ref$port;
-
+module.exports = function({port=8081, debug=false}){
 
   // Browser Code
-  var host = window.document.location.host.replace(/:.*/, '');
-  var ws = new WebSocket('ws://' + host + ':' + port);
+  const host = window.document.location.host.replace(/:.*/, '');
+  const ws = new WebSocket('ws://' + host + ':'+port);
 
   // Node Require
-
-  var Bogo = function (_EventEmitter) {
-    _inherits(Bogo, _EventEmitter);
-
-    function Bogo() {
-      _classCallCheck(this, Bogo);
-
-      return _possibleConstructorReturn(this, (Bogo.__proto__ || Object.getPrototypeOf(Bogo)).apply(this, arguments));
-    }
-
-    return Bogo;
-  }(EventEmitter);
-
-  var bogo = new Bogo();
+  class Bogo extends EventEmitter {}
+  const bogo = new Bogo();
 
   bogo.emit('socket', ws);
 
   // Bogo Core
+  // Bogo Core
+  // given object {name: xxx, data: yyy}
+  // bogo is captured by bogo.on('xxx', function(yyy){})
   ws.onmessage = function (raw) {
-    var _JSON$parse = JSON.parse(raw.data),
-        name = _JSON$parse.name,
-        data = _JSON$parse.data;
-
+    const {name, data} = JSON.parse(raw.data);
+    if(debug) console.log( 'bogo.emit("%s", %s)', name, JSON.stringify({name, data} ) );
     bogo.emit(name, data);
   };
+
   // Bogo Core
   ws.onerror = function (e) {
     bogo.emit('error', e);
   };
-  ws.onclose = function (code, error) {
-    bogo.emit('close', { code: code, error: error });
+
+  ws.onclose = function (code,error) {
+    bogo.emit('close', {code,error});
   };
 
-  bogo.on('reply', function (event) {
+  bogo.on('reply', (event) => {
     ws.send(JSON.stringify(event));
   });
 
   return bogo;
-};
+}
 
 },{"events":19}],2:[function(require,module,exports){
 const sizzle = require('sizzle');
@@ -3016,7 +2996,7 @@ var vfs = Buffer("IyBNYWluIE9iamVjdHMKCm1ha2UgQXBwbGljYXRpb25zICoKbWFrZSBBcHBsaW
 var pookie = require('pookie')(vfs);
 var ensign = require('ensign')({});
 
-var bogo = require('../../bogo')(8081);
+var bogo = require('bogo')({ port: 8081, debug: true });
 var dataCommand = require('data-command')();
 
 var reconcilers = {
@@ -3074,6 +3054,7 @@ transfusion.on('command.create', function (_ref2) {
     text: options.text || "Untitled Task"
   };
   console.log('Create Action Called...:', options, task);
+
   transfusion.emit('send', { type: 'storage', data: task });
 });
 
@@ -3116,7 +3097,7 @@ transfusion.on('install.commands', function (object) {
     transfusion.emit('server.control', object);
   });
   bogo.on('object', function (object) {
-    transfusion.emit('server.object', object);
+    console.log('bogo: object', object);transfusion.emit('server.object', object);
   });
   bogo.on('error', function (object) {
     transfusion.emit('socket.error', object);
@@ -3157,7 +3138,7 @@ $(function () {
 });
 
 }).call(this,require("buffer").Buffer)
-},{"../../bogo":1,"./reconcile.js":16,"buffer":18,"data-command":2,"ensign":5,"events":19,"path":21,"pookie":7,"uuid/v4":14}],16:[function(require,module,exports){
+},{"./reconcile.js":16,"bogo":1,"buffer":18,"data-command":2,"ensign":5,"events":19,"path":21,"pookie":7,"uuid/v4":14}],16:[function(require,module,exports){
 'use strict';
 
 module.exports = function (_ref) {

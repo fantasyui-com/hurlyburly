@@ -7,7 +7,7 @@ const vfs = fs.readFileSync( path.join(__dirname, '..', 'vfs.txt') ).toString();
 const pookie = require('pookie')(vfs);
 const ensign = require('ensign')({});
 
-const bogo = require('../../bogo')(8081);
+const bogo = require('bogo')({port:8081, debug:true});
 const dataCommand = require('data-command')();
 
 const reconcilers = {
@@ -49,7 +49,9 @@ transfusion.on('command.create', ({node, options}) => {
     text: options.text || "Untitled Task"
   };
   console.log('Create Action Called...:', options, task);
+
   transfusion.emit('send', {type:'storage', data:task});
+
 });
 
 transfusion.on('command.stream', ({node, options}) => {
@@ -82,7 +84,7 @@ transfusion.on('install.commands', (object) => {
 
   /// bogo to transfusion proxy (for uniformity)
   bogo.on('control', function(object) { transfusion.emit('server.control', object); })
-  bogo.on('object', function(object) { transfusion.emit('server.object', object); });
+  bogo.on('object', function(object) { console.log('bogo: object', object); transfusion.emit('server.object', object); });
   bogo.on('error', function(object) { transfusion.emit('socket.error', object); });
   bogo.on('close', function(object) { transfusion.emit('socket.close', object); });
 
