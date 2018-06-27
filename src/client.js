@@ -95,7 +95,19 @@ transfusion.on('socket.error', (object) => {
   console.error(object)
 });
 transfusion.on('socket.close', (object) => {
-  console.info(object)
+
+  console.log(object.code.code, object.code, object.code)
+
+   if(object.code.code == 1006){
+     // Server Down
+     console.info('socket.close: Server Restart/Down');
+     setTimeout(()=>location.reload(true), 6000);
+   }else if(object.code.code == 1001){
+     // user reload
+     console.info('socket.close: User Reload');
+   }else{
+     console.info('socket.close:', object);
+   }
 });
 
 /// Boot Transfusion

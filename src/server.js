@@ -1,3 +1,6 @@
+require('fs').watch( __filename, () => process.exit(0) );
+
+const fs = require('fs');
 const util = require('util');
 
 const chokidar = require('chokidar');
@@ -6,8 +9,16 @@ const uuid = require('uuid/v4');
 
 // const retry = require('retry');
 
+const Retry = require('retry-again');
 const WebSocket = require('ws');
 
+
+const WebSocketStates = {
+  'CONNECTING': 0, //	The connection is not yet open.
+  'OPEN': 1, //	The connection is open and ready to communicate.
+  'CLOSING': 2, //	The connection is in the process of closing.
+  'CLOSED': 3, //	The connection is closed.
+};
 
 
 // TODO: Wrap object handeling in Specialized Emitter to escape data: envelope.data madness
@@ -17,86 +28,55 @@ const wss = new WebSocket.Server({ port: 8081 });
 
 const EventEmitter = require('events');
 class Transfusion extends EventEmitter {
+  constructor({socket}){
+    super();
+    this.socket = socket;
+
+    this.interval = setInterval(()=>{
+      if(this.socket.isAlive === false){
+        this.dispose();
+      }
+    }, 30000);
+
+  }
   dispose(){
-      Object.keys(this._events)
-      .map( eventName=>({eventName, listener:this._events[eventName]}))
-      .map(({eventName, listener})=>{
-
-      try {
-        this.removeListener(eventName, listener)
-      } catch(e) {
-        console.log(e);
-      }
-
-      })
-      this.disposed = true;
+    clearInterval(this.interval);
+    Object.keys(this._events)
+    .map( eventName=>({eventName, listener:this._events[eventName]}))
+    .map(({eventName, listener})=>{ try { this.removeListener(eventName, listener) } catch(e) { console.log(e); } })
   }
 }
 
 
 
 
-class Retry {
-
-  constructor( program , options ){
-
-    const defaults = {count:5, delay:10, session:'none'};
-
-    const { count, delay, session } = Object.assign({},defaults,options)
-
-    this.session = session;
-    this.count = count;
-    this.delay = delay;
-
-    this.program = program;
-
-    this.tries = 0;
-  }
-
-  start(){
-
-    setTimeout(()=>{
-
-      let error = null;
-
-      try{
-        this.tries++;
-        this.program(this.tries);
-      } catch(e){
-        error=e;
-        console.log('%s: FAILURE #%d: %s', this.session, this.tries, e.message);
-      }
-
-      if(error){
-        if(this.tries<this.count) {
-          this.start(); // start again;
-        }else{
-          console.log('%s: FAILURE #%d: GIVING UP', this.session, this.tries, error.message);
-        }
-      }else{
-        console.log('%s: SENT OK, retries: %d', this.session, this.tries);
-        //no error, EXIT;
-      }
-
-    }, this.delay);
-  }
-
-}
 
 
 
 
 
+const interval = setInterval(function ping() {
 
-
+  wss.clients.forEach(function each(ws) {
+    if (ws.isAlive === false) {
+      ws.terminate();
+      return
+    }
+    ws.isAlive = false;
+    ws.ping(function(){});
+  });
+}, 30000);
 
 wss.on('connection', function connection(socket) {
-  const transfusion = new Transfusion();
 
+  // must be set before transfusion is initialized
+  socket.isAlive = true;
+  socket.on('pong', function(){this.isAlive = true;});
+
+  const transfusion = new Transfusion({socket});
 
   socket.session = 'session-'+uuid();
   console.log(`\n\n${socket.session}: NEW SESSION!`);
-
 
   socket.on('close', function(code, reason){
     console.log(`${socket.session}: GOT CLOSE: %s, %s`, code, reason)
@@ -108,9 +88,6 @@ wss.on('connection', function connection(socket) {
   })
 
 
-
-
-
   transfusion.on('client.storage', (object) => {
     transfusion.emit('send', {name:'object', data: object });
   });
@@ -119,62 +96,42 @@ wss.on('connection', function connection(socket) {
     transfusion.emit('send', {name:'object', data: object });
   })
 
-  // transfusion.on('send', (object) => {
-  //
-  //   if(!socket.isAlive) return;
-  //
-  //   const encoded = JSON.stringify(object);
-  //   const sendMessage = function(){
-  //       try{
-  //
-  //         if(socket.readyState == 1) {
-  //           socket.send(encoded);
-  //           console.log( `${socket.session}: Ready state OK for object uuid: ${object.data.uuid}` );
-  //          }else{
-  //           throw new Error( `${socket.session}: Ready state error for object uuid: ${object.data.uuid}` );
-  //           console.log( `${socket.session}: Ready state error for object uuid: ${object.data.uuid}` );
-  //         }
-  //       }catch(e){
-  //         throw e;
-  //       }
-  //   }
-  //   const retry = new Retry(sendMessage, {count:2, delay:10, session: socket.session});
-  //   retry.start();
-  //
-  // });
-
   transfusion.on('send', (object) => {
 
-    if(socket ) {
-      if(socket.readyState <= 2) {
+    WebSocketStates
+
+      if ( (socket.readyState == WebSocketStates.CONNECTING) || (socket.readyState == WebSocketStates.OPEN) ) {
+
         const encoded = JSON.stringify(object);
         const sendMessage = function(){
             try{
-
-              if(socket.readyState == 1) {
+              if(socket.readyState == WebSocketStates.OPEN) {
                 socket.send(encoded);
                 console.log( `${socket.session}: Ready state OK for object uuid: ${object.data.uuid}` );
                }else{
                 throw new Error( `${socket.session}: Ready state error for object uuid: ${object.data.uuid}` );
                 console.log( `${socket.session}: Ready state error for object uuid: ${object.data.uuid}` );
               }
-            }catch(e){
+            } catch(e){
               throw e;
             }
         }
-        const retry = new Retry(sendMessage, {count:2, delay:10, session: socket.session});
-        retry.start();
+
+        try{
+          sendMessage();
+        }catch(e){
+          // network problems are many but mostly we await transition between WebSocketStates.CONNECTING to WebSocketStates.OPEN
+          // this retry system is in place for solving other network problems such as strange disconnects from keep-alive and proxies
+          new Retry(sendMessage, {count:2, delay:100}); // a total of 3 tries.
+        }
+
       }
-    }
-
-
 
   });
 
   transfusion.emit('client.connection', {socket});
 
   socket.on('message', function incoming(data) {
-    //console.log('Got message', data);
     transfusion.emit('client.message', data);
   });
 
@@ -184,20 +141,15 @@ wss.on('connection', function connection(socket) {
       transfusion.emit('client.envelope', envelope);
 
       if(envelope.type) {
-        // console.log('Got envelope of type [%s]', envelope.type);
         transfusion.emit(`client.${envelope.type}`, envelope.data);
       }
-
     }catch(e){
       console.error(e)
     }
   });
 
-
-
   transfusion.emit('send.object', {uuid:'aaf', version:1, tags:'todo,today,bork', text:"Buy Milk!"});
-    transfusion.emit('send', {name:'object', data: {uuid:'aag', version:1, tags:'todo,today,bork', text:"Buy Socks!"} });
-
+  transfusion.emit('send', {name:'object', data: {uuid:'aag', version:1, tags:'todo,today,bork', text:"Buy Socks!"} });
 
 })
 
