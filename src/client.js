@@ -7,7 +7,7 @@ const vfs = fs.readFileSync( path.join(__dirname, '..', 'vfs.txt') ).toString();
 const pookie = require('pookie')(vfs);
 const ensign = require('ensign')({});
 
-const bogo = require('bogo')(8081);
+const bogo = require('../../bogo')(8081);
 const dataCommand = require('data-command')();
 
 const reconcilers = {
@@ -31,6 +31,7 @@ transfusion.on('server.control', (object) => {
 });
 
 transfusion.on('server.object', (object) => {
+  console.log('server.object', object)
   pookie.pipe(object); // insert object into pookie
 });
 
@@ -82,11 +83,19 @@ transfusion.on('install.commands', (object) => {
   /// bogo to transfusion proxy (for uniformity)
   bogo.on('control', function(object) { transfusion.emit('server.control', object); })
   bogo.on('object', function(object) { transfusion.emit('server.object', object); });
+  bogo.on('error', function(object) { transfusion.emit('socket.error', object); });
+  bogo.on('close', function(object) { transfusion.emit('socket.close', object); });
 
 });
 
 transfusion.on('dom.ready', (object) => {
   transfusion.emit('install.commands');
+});
+transfusion.on('socket.error', (object) => {
+  console.error(object)
+});
+transfusion.on('socket.close', (object) => {
+  console.info(object)
 });
 
 /// Boot Transfusion
