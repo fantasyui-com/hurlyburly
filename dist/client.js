@@ -10,11 +10,14 @@ var util = require('util');
 
 var port = 8081;
 var vfs = Buffer("IyBNYWluIE9iamVjdHMKCm1ha2UgQXBwbGljYXRpb25zICoKbWFrZSBBcHBsaWNhdGlvbnMvVG9kbyB0b2RvCm1ha2UgQXBwbGljYXRpb25zL1RvZG8vVG9kYXkgdG9kYXkK","base64").toString();
+
 var reconcilers = {
   'plain': require('./reconcile.js')
 };
 
-transfusion({ vfs: vfs, reconcilers: reconcilers, port: port });
+transfusion({ vfs: vfs, reconcilers: reconcilers, port: port }).on('command.bork', function () {
+  console.log('BORK, BORK, BORK!!!');
+});
 
 }).call(this,require("buffer").Buffer)
 },{"../../transfusion/client":3,"./reconcile.js":2,"buffer":20,"path":24,"util":27}],2:[function(require,module,exports){
@@ -89,7 +92,7 @@ module.exports = function (options) {
   const pookie = require('pookie')(options.vfs);
   const ensign = require('ensign')({});
 
-  const bogo = require('bogo')({ port: 8081, debug: true });
+  const bogo = require('bogo')({ port: options.port, debug: true });
   const dataCommand = require('data-command')();
 
   const reconcilers = options.reconcilers;
@@ -218,6 +221,8 @@ module.exports = function (options) {
   $(function () {
     transfusion.emit('dom.ready');
   });
+
+  return transfusion;
 };
 
 },{"bogo":4,"data-command":5,"ensign":7,"events":21,"path":24,"pookie":10,"uuid/v4":18}],4:[function(require,module,exports){

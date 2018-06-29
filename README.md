@@ -3,11 +3,48 @@ Todo Application based on the pookie object tree & cuddlemuffin object store.
 
 ## User Interface: Template Reconciler Stream
 
-![](screenshot.png)
+![](screenshot-1.png)
+![](screenshot-2.png)
 
-## Notes
 
-  - The src directory contains es6 code,
-  and needs to be transpiled for use in browsers.
-  Overall, the reason for transpilation is eventual
-  use of node libraries in client.js (so require & co.)
+## Client
+```JavaScript
+
+const transfusion = require('../../transfusion/client');
+
+const fs = require('fs');
+const path = require('path');
+const util = require('util');
+
+const port = 8081;
+const vfs = fs.readFileSync( path.join(__dirname, '..', 'vfs.txt') ).toString();
+
+const reconcilers = {
+  'plain': require('./reconcile.js')
+}
+
+transfusion({ vfs, reconcilers, port, })
+
+.on('command.bork', () => {
+  console.log('BORK, BORK, BORK!!!');
+});
+
+```
+
+
+## Server
+
+```JavaScript
+
+const transfusion = require('../../transfusion/server');
+
+const fs = require('fs');
+const path = require('path');
+const util = require('util');
+
+const cuddlemuffinData =  path.join(__dirname, '..', 'cuddlemuffin-data');
+const port = 8081;
+
+transfusion({ cuddlemuffinData, port, });
+
+```
