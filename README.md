@@ -6,6 +6,24 @@ Todo Application based on the pookie object tree & cuddlemuffin object store.
 ![](screenshot-1.png)
 ![](screenshot-2.png)
 
+## HTML
+
+```HTML
+
+
+<div class="card text-white bg-info shadow">
+  <ul data-command="stream --source Applications/Todo/Today --template todo-item-template --reconciler plain | load " class="list-group list-group-flush"></ul>
+</div>
+
+
+<div class="d-none template" id="todo-item-template">
+    <li class="list-group-item bg-info text-white">
+      <input data-variable="text" type="text" class="form-control todo-text text-white" placeholder="Enter task text">
+    </li>
+</div>
+
+```
+
 
 ## Client
 ```JavaScript
