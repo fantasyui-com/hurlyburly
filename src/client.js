@@ -7,8 +7,8 @@ const vfs = fs.readFileSync( path.join(__dirname, '..', 'vfs.txt') ).toString();
 const pookie = require('pookie')(vfs);
 const ensign = require('ensign')({});
 
-const bogo = require('../../bogo')({port:8081, debug:true});
-const dataCommand = require('../../data-command')();
+const bogo = require('bogo')({port:8081, debug:true});
+const dataCommand = require('data-command')();
 
 const reconcilers = {
   'plain': require('./reconcile.js')
