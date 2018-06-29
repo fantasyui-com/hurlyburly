@@ -2,10 +2,11 @@ console.info(`[RE]STARTING: ${__filename}`)
 require('fs').watch( __filename, () => process.exit(0) );
 
 const fs = require('fs');
+const path = require('path');
+
 const util = require('util');
 
 const chokidar = require('chokidar');
-const path = require('path');
 const uuid = require('uuid/v4');
 
 const cuddlemuffin = require('cuddlemuffin')();
@@ -24,6 +25,29 @@ const WebSocketStates = {
 
 // TODO: Wrap object handeling in Specialized Emitter to escape data: envelope.data madness
 // TODO: Employ https://github.com/fantasyui-com/cuddlemuffin for data storage
+
+
+var watcher = chokidar.watch(path.resolve(path.join(__dirname, '..', 'cuddlemuffin-data')), {
+  depth: 3,
+  persistent: true
+});
+
+// Something to use when events are received.
+var log = console.log.bind(console);
+// Add event listeners.
+watcher
+
+  .on('add', path => log(`File ${path} has been added`))
+  .on('change', path => log(`File ${path} has been changed`))
+
+  .on('unlink', path => log(`File ${path} has been removed`))
+  .on('addDir', path => log(`Directory ${path} has been added`))
+  .on('unlinkDir', path => log(`Directory ${path} has been removed`))
+  .on('error', error => log(`Watcher error: ${error}`))
+  .on('ready', () => log('Initial scan complete. Ready for changes'))
+  .on('raw', (event, path, details) => {
+    log('Raw event info:', event, path, details);
+  });
 
 const wss = new WebSocket.Server({ port: 8081 });
 
@@ -79,10 +103,27 @@ wss.on('connection', function connection(socket) {
     if(!transfusion.disposed) transfusion.dispose();
   })
 
-  transfusion.on('client.storage', async (object) => {
+    transfusion.on('client.storage', async (object) => {
     await cuddlemuffin.set(object);
     const stored = await cuddlemuffin.get(object.uuid);
     transfusion.emit('send.object', stored);
+  });
+
+  watcher.on('add', async target => {
+      const uuid = target.split(path.sep).reverse()[1];
+      const stored = await cuddlemuffin.get(uuid);
+      transfusion.emit('send.object', stored);
+    });
+
+  watcher.on('change', async target => {
+      const uuid =  target.split(path.sep).reverse()[1];
+      const stored = await cuddlemuffin.get(uuid);
+      transfusion.emit('send.object', stored);
+    });
+
+  transfusion.on('client.load', async (object) => {
+    const entries = await cuddlemuffin.entries();
+    transfusion.emit('send', {name:'objects', data: entries });
   });
 
   transfusion.on('send.object', (object) => {
@@ -139,8 +180,8 @@ wss.on('connection', function connection(socket) {
     }
   });
 
-  transfusion.emit('send.object', {uuid:'aaf', version:1, tags:'todo,today,bork', text:"Buy Milk!"});
+//   transfusion.emit('send.object', {uuid:'aaf', version:1, tags:'todo,today,bork', text:"Buy Milk!"});
 
-  transfusion.emit('send', {name:'object', data: {uuid:'aag', version:1, tags:'todo,today,bork', text:"Buy Socks!"} });
+  // transfusion.emit('send', {name:'object', data: {uuid:'aag', version:1, tags:'todo,today,bork', text:"Buy Socks!"} });
 
 })

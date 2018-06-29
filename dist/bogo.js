@@ -18,7 +18,7 @@ module.exports = function({port=8081, debug=false}){
   // bogo is captured by bogo.on('xxx', function(yyy){})
   ws.onmessage = function (raw) {
     const {name, data} = JSON.parse(raw.data);
-    if(debug) console.log( 'bogo.emit("%s", %s)', name, JSON.stringify({name, data} ) );
+    if(debug) console.log( 'bogo.emit("%s", %s)', name, JSON.stringify({name, data}) );
     bogo.emit(name, data);
   };
 

@@ -4,6 +4,10 @@ module.exports = function({node, template}){
 
     // console.log('Reconciler Called with data list', dataList)
 
+    $(node).on('click', 'li', function(){
+      console.log('delegated click', $( this ))
+    })
+
     if(dataList && dataList.forEach) dataList.forEach(function(data){
       const interpolation = $(template).clone(true);
       $(interpolation).attr('id', data.uuid);

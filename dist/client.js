@@ -1,96 +1,221 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
-const EventEmitter = require('events');
+'use strict';
 
-module.exports = function({port=8081, debug=false}){
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
+
+var EventEmitter = require('events');
+var Retry = require('retry-again');
+var WebSocketStates = {
+  'CONNECTING': 0, //	The connection is not yet open.
+  'OPEN': 1, //	The connection is open and ready to communicate.
+  'CLOSING': 2, //	The connection is in the process of closing.
+  'CLOSED': 3 //	The connection is closed.
+};
+module.exports = function (_ref) {
+  var _ref$port = _ref.port,
+      port = _ref$port === undefined ? 8081 : _ref$port,
+      _ref$debug = _ref.debug,
+      debug = _ref$debug === undefined ? false : _ref$debug;
+
 
   // Browser Code
-  const host = window.document.location.host.replace(/:.*/, '');
-  const ws = new WebSocket('ws://' + host + ':'+port);
+  var host = window.document.location.host.replace(/:.*/, '');
+  var socket = new WebSocket('ws://' + host + ':' + port);
 
   // Node Require
-  class Bogo extends EventEmitter {}
-  const bogo = new Bogo();
 
-  bogo.emit('socket', ws);
+  var Bogo = function (_EventEmitter) {
+    _inherits(Bogo, _EventEmitter);
+
+    function Bogo() {
+      _classCallCheck(this, Bogo);
+
+      return _possibleConstructorReturn(this, (Bogo.__proto__ || Object.getPrototypeOf(Bogo)).apply(this, arguments));
+    }
+
+    return Bogo;
+  }(EventEmitter);
+
+  var bogo = new Bogo();
+
+  bogo.emit('socket', socket);
 
   // Bogo Core
   // Bogo Core
   // given object {name: xxx, data: yyy}
   // bogo is captured by bogo.on('xxx', function(yyy){})
-  ws.onmessage = function (raw) {
-    const {name, data} = JSON.parse(raw.data);
-    if(debug) console.log( 'bogo.emit("%s", %s)', name, JSON.stringify({name, data} ) );
+  socket.onmessage = function (raw) {
+    var _JSON$parse = JSON.parse(raw.data),
+        name = _JSON$parse.name,
+        data = _JSON$parse.data;
+
+    if (debug) console.log('bogo.emit("%s", %s)', name, JSON.stringify({ name: name, data: data }));
     bogo.emit(name, data);
   };
 
   // Bogo Core
-  ws.onerror = function (e) {
+  socket.onerror = function (e) {
     bogo.emit('error', e);
   };
 
-  ws.onclose = function (code,error) {
-    bogo.emit('close', {code,error});
+  socket.onclose = function (code, error) {
+    bogo.emit('close', { code: code, error: error });
   };
 
-  bogo.on('reply', (event) => {
-    ws.send(JSON.stringify(event));
+  // bogo.on('reply', (data) => {
+  //   if(data){
+  //     const str = JSON.stringify(data);
+  //     console.log('Sending', str, socket)
+  //     socket.send(str);
+  //   }
+  // });
+
+
+  bogo.on('reply', function (object) {
+
+    console.log('Bogo reply!');
+
+    var encoded = JSON.stringify(object);
+    var sendMessage = function sendMessage() {
+      console.log('Bogo sendMessage!');
+
+      try {
+        if (socket.readyState == WebSocketStates.OPEN) {
+          socket.send(encoded);
+          console.log('Ready state OK');
+        } else {
+          console.log('socket.readyState is ' + socket.readyState);
+          throw new Error('socket.readyState is ' + socket.readyState);
+        }
+      } catch (e) {
+        throw e;
+      }
+    };
+
+    try {
+      if (socket.readyState == WebSocketStates.OPEN) {
+        sendMessage();
+      } else {
+        console.log('socket.readyState is ' + socket.readyState);
+        throw new Error('socket.readyState is ' + socket.readyState);
+      }
+    } catch (e) {
+      // network problems are many but mostly we await transition between WebSocketStates.CONNECTING to WebSocketStates.OPEN
+      // this retry system is in place for solving other network problems such as strange disconnects from keep-alive and proxies
+      console.log('Begin retry procedure....');
+      new Retry(sendMessage, { count: 10, delay: 250, debug: true }); // a total of 3 tries.
+    }
   });
 
   return bogo;
+};
+
+},{"events":20,"retry-again":2}],2:[function(require,module,exports){
+
+class Retry {
+
+  constructor( program , options ){
+    const defaults = {count:5, delay:10, start:true, end:null, debug:false};
+    const { count, delay, start, end } = Object.assign({}, defaults, options)
+    this.end = end;
+    this.count = count;
+    this.delay = delay;
+    this.program = program;
+    this.tries = 0;
+    this.failure = null;
+    if(start) this.start();
+
+  }
+
+  start(){
+
+    setTimeout(()=>{
+
+      let error = null;
+      try{
+        this.tries++;
+        this.program(this.tries);
+      } catch(e){
+        error=e;
+      }
+      if(error){
+        if(this.tries<this.count) {
+          if (this.debug) console.log('retry-again: retries: %d', this.tries);
+          this.start(); // start again;
+        }else{
+          if (this.debug) console.log('retry-again: SOCKET MESSAGE FAILURE #%d: GIVING UP.', this.tries, error.message);
+          this.failure = true;
+          if(this.end) this.end(this.failure);
+        }
+      }else{
+        if (this.debug) console.log('retry-again: SENT OK, retries: %d', this.tries);
+        //no error, EXIT;
+        this.failure = false;
+        if(this.end) this.end(this.failure);
+      }
+
+    }, this.delay);
+  }
+
 }
 
-},{"events":19}],2:[function(require,module,exports){
+module.exports = Retry;
+
+},{}],3:[function(require,module,exports){
 const sizzle = require('sizzle');
 const minimist = require('minimist');
 
-module.exports = function(options){
+module.exports = function (options) {
 
-  const commands = function(){
+  const commands = function () {
     const nodes = sizzle('*[data-command]');
 
-    return nodes.map(function(node){
+    return nodes.map(function (node) {
       const command = node.dataset.command;
       const commands = [];
 
-      command.split("|").forEach( function(input){
-        const cargv = input.match(/\\?.|^$/g).reduce((p, c) => {
-        if(c === '"'){
-            p.quote ^= 1;
-        }else if(!p.quote && c === ' '){
-            p.a.push('');
-        }else{
-            p.a[p.a.length-1] += c.replace(/\\(.)/,"$1");
-        }
-        return  p;
-        }, {a: ['']}).a
+      command.split("|").forEach(function (input) {
 
-        const cleaned = cargv.filter(i=>i);
+        const cargv = input.match(/\\?.|^$/g).reduce((p, c) => {
+          if (c === '"') {
+            p.quote ^= 1;
+          } else if (!p.quote && c === ' ') {
+            p.a.push('');
+          } else {
+            p.a[p.a.length - 1] += c.replace(/\\(.)/, "$1");
+          }
+          return p;
+        }, { a: [''] }).a;
+
+        const cleaned = cargv.filter(i => i);
         const optionized = minimist(cleaned);
 
         const command = {};
 
-        if(optionized._.length > 0){
-          command.command = optionized._.shift();
-          if (optionized._.length == 0){
+        if (optionized._.length > 0) {
+          command.program = optionized._.shift();
+          if (optionized._.length == 0) {
             delete optionized._;
           }
         }
-        Object.assign(command,optionized)
+
+        Object.assign(command, node.dataset, optionized);
 
         commands.push(command);
+      });
 
-      })
-
-      return {node, commands}
+      return { node, commands };
     });
+  };
 
-  }
+  return { commands };
+};
 
-  return {commands}
-
-}
-
-},{"minimist":3,"sizzle":11}],3:[function(require,module,exports){
+},{"minimist":4,"sizzle":5}],4:[function(require,module,exports){
 module.exports = function (args, opts) {
     if (!opts) opts = {};
     
@@ -328,289 +453,7 @@ function isNumber (x) {
 }
 
 
-},{}],4:[function(require,module,exports){
-module.exports = function(options){
-
-  const db = new Map();
-  const track = new Map();
-
-  return {
-    set: function(path, object){
-
-      if( track.has(path) ){
-      }else{
-        track.set(path, new Set())
-      }
-      track.get(path).add(object.uuid)
-
-        if(db.has(object.uuid)){
-          // Object Exists
-          if(object.version > db.get(object.uuid).version ){
-            // Incoming has an older version
-            db.set(object.uuid, object);
-            return true; // a change has occured in the dataset
-          }
-        }else{
-          // First-time Storage
-          db.set(object.uuid, object);
-          return true; // a change has occured in the dataset
-        }
-     },
-    get: function(uuid){
-       return db.get(uuid);
-     },
-    all: function(path){
-      return track.has(path)?Array.from(track.get(path)).map(id=>db.get(id)):[];
-     },
-  };
-
-}
-
 },{}],5:[function(require,module,exports){
-module.exports = function(options){
-
-  const db = [];
-
-  const log = function(command){
-
-    if(command) db.push(command);
-
-    return db;
-
-  }
-
-  const replay = function(log, commands, data){
-
-  }
-
-  return {
-    log,
-    replay,
-  }
-
-}
-
-},{}],6:[function(require,module,exports){
-
-const Tree = require('./lib/Tree.js')
-const Root = require('./lib/Root.js')
-const Branch = require('./lib/Branch.js')
-
-module.exports = {Tree, Root, Branch};
-
-},{"./lib/Branch.js":8,"./lib/Root.js":9,"./lib/Tree.js":10}],7:[function(require,module,exports){
-const enbuffer = require('../enbuffer')();
-
-const {Tree, Root, Branch} = require('./core.js');
-
-
-module.exports = function(vfs){
-
-  const root = new Root();
-  Tree.importMap(root, Tree.decodeMap(vfs));
-
-  return {
-
-    mount1: function(path, reconciler){
-
-      const response = {root};
-      const fake = {};
-
-      fake.uuid = (new Date).getTime();
-      fake.version = (new Date).getTime();
-      fake.class = (new Date).getTime();
-
-      // when changes are deted the tree will
-      reconciler( fake );
-      setInterval(function(){
-        reconciler( fake );
-      },3000);
-
-      return response;
-    }, // API
-
-    mount: function(path, reconciler){
-      const branch = root.locate(path);
-      // branch.on('data', function(dataList){
-      //   // console.log('Path "%s" got data and is sending it into the reconciler.', path)
-      //   reconciler(dataList);
-      // });
-
-      branch.on('object', function(object){
-        if ( enbuffer.set(path, object) ) reconciler(enbuffer.all( path ));
-      });
-
-    }, // API
-
-    pipe: function(object){
-      root.pipe(object);
-    }, // API
-
-  } // return object
-} // main
-
-},{"../enbuffer":4,"./core.js":6}],8:[function(require,module,exports){
-const EventEmitter = require('events');
-
-class Branch  extends EventEmitter {
-
-  constructor(name, parent) {
-    super();
-
-    this.name = name;
-    this.data = null;
-
-    this.parent = parent;
-
-    this.children = new Map();
-
-    this.tags = new Set();
-  }
-
-  tag(input=[]) {
-    const tags = Array.isArray(input)?input:input.split(/,| /);
-    // apply tag
-    tags.forEach(tag => {
-      //if(tag === '*') return;
-      //console.log(`Tagging ${this.name} with ${tag}`);
-      this.tags.add(tag);
-    });
-    //console.log(this.tags)
-  }
-
-  sharesTags(input) {
-    if( this.tags.has('*') ){
-      return true;
-    }
-    const tags = Array.isArray(input)?input:input.split(/,| /);
-    let match = false;
-    tags.forEach(tag => {
-      if(this.tags.has(tag)) match = true;
-    });
-    return match
-  }
-
-  pipe(object) {
-
-    if( this.sharesTags(object.tags )){
-      //console.info(`Branch ${this.name} (${ Array.from(this.tags).join('+') }/${this.tags.size}) accepted object with tags ${object.tags}`);
-      // the object shares some tags with this branch,
-      // this means information can be passed down
-      this.emit('object', object);
-      for (let [key, child] of this.children) {
-        child.pipe(object);
-      }
-    } else {
-      //console.info(`Branch ${this.name} (${ Array.from(this.tags).join('+') }/${this.tags.size}) dropped object with tags ${object.tags}`);
-      //console.log(this)
-      //console.log(this.tags)
-      // this branch does not share tags with the incoming object,
-      // the object will not trigger anything
-    }
-
-  }
-
-  has(name) {
-    return this.children.has(name);
-  }
-
-  set(name, object) {
-    this.children.set(name, object);
-    return object;
-  }
-
-  get(name) {
-    return this.children.get(name);
-  }
-
-  locate( input ) {
-    const path = Array.isArray(input)?input:input.split('/');
-    let selectedNode = this;
-    //console.log('Locate: %s', path)
-    path.forEach(function(name){
-      //console.log("Does selected node (%s) have a name of %s? :", selectedNode.name, name, selectedNode.has(name) )
-        if( selectedNode.has(name) ){
-          // name already there, so just grab that node
-          selectedNode = selectedNode.get(name);
-        }else{
-          // create new node
-          selectedNode = null;
-        }
-    });
-    return selectedNode;
-  }
-
-  make({path, tags}) {
-    let selectedNode = this;
-    path.forEach(function(name){
-      if(selectedNode.has(name) ){
-        // name already there, so just grab that node
-        selectedNode = selectedNode.get(name);
-      }else{
-        // create new node
-        selectedNode = selectedNode.set(name, new Branch(name, selectedNode));
-      }
-    });
-    selectedNode.tag(tags);
-    // console.log( 'Tagged "%s" with %s', selectedNode.name, tags );
-  }
-
-}
-
-module.exports = Branch;
-
-},{"events":19}],9:[function(require,module,exports){
-
-const Branch = require('./Branch.js');
-
-class Root extends Branch {
-  constructor(name) {
-    super('root');
-    this.tag(['*'])
-  }
-}
-
-module.exports = Root;
-
-},{"./Branch.js":8}],10:[function(require,module,exports){
-// This is a Utility Object like Math or Array
-
-const Root = require('./Root.js');
-const Branch = require('./Branch.js');
-
-const Tree = {
-
-  decodeMap(map) {
-    const response = map.split( '\n' ) // turn into lines
-     .map( l=>l.trim().replace(/ +/g, ' ') ) // clean up lines
-     .filter( l=>!(l.match(/^ {0,}#/)) ) // eliminate comments
-     .filter( l=>l ) // eliminate empties
-     .map(function(l){ let [cmd, path, tags] = l.split(" "); return {cmd, path, tags}; } ) // split cmd/path-string
-     .map(function(o){ o.path = o.path.split("/"); o.tags = o.tags?o.tags.split(","):[]; return o;} ) // split path into fragments
-     .map(function(o){ o.tags = o.tags.map(i=>i.trim()).filter(i=>i); return o;} ) // split path into fragments
-
-    return response;
-  },
-
-  importMap(tree, map) {
-    map.forEach(function({cmd, path, tags}){
-      tree[cmd]({path, tags});
-    })
-  },
-
-  importData(root, producer) {
-    producer(function(record){
-      //console.log(record);
-      root.pipe(record)
-    });
-  }
-
-
-}
-
-module.exports = Tree;
-
-},{"./Branch.js":8,"./Root.js":9}],11:[function(require,module,exports){
 /*!
  * Sizzle CSS Selector Engine v2.3.3
  * https://sizzlejs.com/
@@ -2884,7 +2727,290 @@ if ( typeof define === "function" && define.amd ) {
 
 })( window );
 
-},{}],12:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
+module.exports = function(options){
+
+  const db = new Map();
+  const track = new Map();
+
+  return {
+    set: function(path, object){
+
+      if( track.has(path) ){
+      }else{
+        track.set(path, new Set())
+      }
+      track.get(path).add(object.uuid)
+
+        if(db.has(object.uuid)){
+          // Object Exists
+          if(object.version > db.get(object.uuid).version ){
+            // Incoming has an older version
+            db.set(object.uuid, object);
+            return true; // a change has occured in the dataset
+          }
+        }else{
+          // First-time Storage
+          db.set(object.uuid, object);
+          return true; // a change has occured in the dataset
+        }
+     },
+    get: function(uuid){
+       return db.get(uuid);
+     },
+    all: function(path){
+      const all = track.has(path)?Array.from(track.get(path)).map(id=>db.get(id)):[];
+      return all.filter(i=> !!(i.deleted) === false )
+     },
+  };
+
+}
+
+},{}],7:[function(require,module,exports){
+module.exports = function(options){
+
+  const db = [];
+
+  const log = function(command){
+
+    if(command) db.push(command);
+
+    return db;
+
+  }
+
+  const replay = function(log, commands, data){
+
+  }
+
+  return {
+    log,
+    replay,
+  }
+
+}
+
+},{}],8:[function(require,module,exports){
+
+const Tree = require('./lib/Tree.js')
+const Root = require('./lib/Root.js')
+const Branch = require('./lib/Branch.js')
+
+module.exports = {Tree, Root, Branch};
+
+},{"./lib/Branch.js":10,"./lib/Root.js":11,"./lib/Tree.js":12}],9:[function(require,module,exports){
+const enbuffer = require('../enbuffer')();
+
+const {Tree, Root, Branch} = require('./core.js');
+
+
+module.exports = function(vfs){
+
+  const root = new Root();
+  Tree.importMap(root, Tree.decodeMap(vfs));
+
+  return {
+
+    mount1: function(path, reconciler){
+
+      const response = {root};
+      const fake = {};
+
+      fake.uuid = (new Date).getTime();
+      fake.version = (new Date).getTime();
+      fake.class = (new Date).getTime();
+
+      // when changes are deted the tree will
+      reconciler( fake );
+      setInterval(function(){
+        reconciler( fake );
+      },3000);
+
+      return response;
+    }, // API
+
+    mount: function(path, reconciler){
+      const branch = root.locate(path);
+      // branch.on('data', function(dataList){
+      //   // console.log('Path "%s" got data and is sending it into the reconciler.', path)
+      //   reconciler(dataList);
+      // });
+
+      branch.on('object', function(object){
+        if ( enbuffer.set(path, object) ) reconciler(enbuffer.all( path ));
+      });
+
+    }, // API
+
+    pipe: function(object){
+      root.pipe(object);
+    }, // API
+
+  } // return object
+} // main
+
+},{"../enbuffer":6,"./core.js":8}],10:[function(require,module,exports){
+const EventEmitter = require('events');
+
+class Branch  extends EventEmitter {
+
+  constructor(name, parent) {
+    super();
+
+    this.name = name;
+    this.data = null;
+
+    this.parent = parent;
+
+    this.children = new Map();
+
+    this.tags = new Set();
+  }
+
+  tag(input=[]) {
+    const tags = Array.isArray(input)?input:input.split(/,| /);
+    // apply tag
+    tags.forEach(tag => {
+      //if(tag === '*') return;
+      //console.log(`Tagging ${this.name} with ${tag}`);
+      this.tags.add(tag);
+    });
+    //console.log(this.tags)
+  }
+
+  sharesTags(input) {
+    if( this.tags.has('*') ){
+      return true;
+    }
+    const tags = Array.isArray(input)?input:input.split(/,| /);
+    let match = false;
+    tags.forEach(tag => {
+      if(this.tags.has(tag)) match = true;
+    });
+    return match
+  }
+
+  pipe(object) {
+
+    if( this.sharesTags(object.tags )){
+      //console.info(`Branch ${this.name} (${ Array.from(this.tags).join('+') }/${this.tags.size}) accepted object with tags ${object.tags}`);
+      // the object shares some tags with this branch,
+      // this means information can be passed down
+      this.emit('object', object);
+      for (let [key, child] of this.children) {
+        child.pipe(object);
+      }
+    } else {
+      //console.info(`Branch ${this.name} (${ Array.from(this.tags).join('+') }/${this.tags.size}) dropped object with tags ${object.tags}`);
+      //console.log(this)
+      //console.log(this.tags)
+      // this branch does not share tags with the incoming object,
+      // the object will not trigger anything
+    }
+
+  }
+
+  has(name) {
+    return this.children.has(name);
+  }
+
+  set(name, object) {
+    this.children.set(name, object);
+    return object;
+  }
+
+  get(name) {
+    return this.children.get(name);
+  }
+
+  locate( input ) {
+    const path = Array.isArray(input)?input:input.split('/');
+    let selectedNode = this;
+    //console.log('Locate: %s', path)
+    path.forEach(function(name){
+      //console.log("Does selected node (%s) have a name of %s? :", selectedNode.name, name, selectedNode.has(name) )
+        if( selectedNode.has(name) ){
+          // name already there, so just grab that node
+          selectedNode = selectedNode.get(name);
+        }else{
+          // create new node
+          selectedNode = null;
+        }
+    });
+    return selectedNode;
+  }
+
+  make({path, tags}) {
+    let selectedNode = this;
+    path.forEach(function(name){
+      if(selectedNode.has(name) ){
+        // name already there, so just grab that node
+        selectedNode = selectedNode.get(name);
+      }else{
+        // create new node
+        selectedNode = selectedNode.set(name, new Branch(name, selectedNode));
+      }
+    });
+    selectedNode.tag(tags);
+    // console.log( 'Tagged "%s" with %s', selectedNode.name, tags );
+  }
+
+}
+
+module.exports = Branch;
+
+},{"events":20}],11:[function(require,module,exports){
+
+const Branch = require('./Branch.js');
+
+class Root extends Branch {
+  constructor(name) {
+    super('root');
+    this.tag(['*'])
+  }
+}
+
+module.exports = Root;
+
+},{"./Branch.js":10}],12:[function(require,module,exports){
+// This is a Utility Object like Math or Array
+
+const Root = require('./Root.js');
+const Branch = require('./Branch.js');
+
+const Tree = {
+
+  decodeMap(map) {
+    const response = map.split( '\n' ) // turn into lines
+     .map( l=>l.trim().replace(/ +/g, ' ') ) // clean up lines
+     .filter( l=>!(l.match(/^ {0,}#/)) ) // eliminate comments
+     .filter( l=>l ) // eliminate empties
+     .map(function(l){ let [cmd, path, tags] = l.split(" "); return {cmd, path, tags}; } ) // split cmd/path-string
+     .map(function(o){ o.path = o.path.split("/"); o.tags = o.tags?o.tags.split(","):[]; return o;} ) // split path into fragments
+     .map(function(o){ o.tags = o.tags.map(i=>i.trim()).filter(i=>i); return o;} ) // split path into fragments
+
+    return response;
+  },
+
+  importMap(tree, map) {
+    map.forEach(function({cmd, path, tags}){
+      tree[cmd]({path, tags});
+    })
+  },
+
+  importData(root, producer) {
+    producer(function(record){
+      //console.log(record);
+      root.pipe(record)
+    });
+  }
+
+
+}
+
+module.exports = Tree;
+
+},{"./Branch.js":10,"./Root.js":11}],13:[function(require,module,exports){
 /**
  * Convert array of 16 byte values to UUID string format of the form:
  * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
@@ -2910,7 +3036,7 @@ function bytesToUuid(buf, offset) {
 
 module.exports = bytesToUuid;
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 // Unique ID creation requires a high quality random # generator.  In the
 // browser this is a little complicated due to unknown quality of Math.random()
 // and inconsistent support for the `crypto` API.  We do the best we can via
@@ -2946,7 +3072,7 @@ if (getRandomValues) {
   };
 }
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 var rng = require('./lib/rng');
 var bytesToUuid = require('./lib/bytesToUuid');
 
@@ -2977,7 +3103,7 @@ function v4(options, buf, offset) {
 
 module.exports = v4;
 
-},{"./lib/bytesToUuid":12,"./lib/rng":13}],15:[function(require,module,exports){
+},{"./lib/bytesToUuid":13,"./lib/rng":14}],16:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 
@@ -2996,8 +3122,8 @@ var vfs = Buffer("IyBNYWluIE9iamVjdHMKCm1ha2UgQXBwbGljYXRpb25zICoKbWFrZSBBcHBsaW
 var pookie = require('pookie')(vfs);
 var ensign = require('ensign')({});
 
-var bogo = require('bogo')({ port: 8081, debug: true });
-var dataCommand = require('data-command')();
+var bogo = require('../../bogo')({ port: 8081, debug: true });
+var dataCommand = require('../../data-command')();
 
 var reconcilers = {
   'plain': require('./reconcile.js')
@@ -3022,6 +3148,7 @@ var Transfusion = function (_EventEmitter) {
 var transfusion = new Transfusion();
 
 transfusion.on('send', function (object) {
+  console.log('send triggered bogo reply', object);
   bogo.emit('reply', object);
 });
 
@@ -3032,6 +3159,13 @@ transfusion.on('server.control', function (object) {
 transfusion.on('server.object', function (object) {
   console.log('server.object', object);
   pookie.pipe(object); // insert object into pookie
+});
+
+transfusion.on('server.objects', function (objects) {
+  console.log('server.objects', objects);
+  objects.map(function (object) {
+    return pookie.pipe(object);
+  });
 });
 
 /// Register Commands
@@ -3058,39 +3192,24 @@ transfusion.on('command.create', function (_ref2) {
   transfusion.emit('send', { type: 'storage', data: task });
 });
 
+transfusion.on('command.load', function () {
+  console.log('command.load triggered dispatching send');
+  transfusion.emit('send', { type: 'load' });
+});
+
 transfusion.on('command.stream', function (_ref3) {
   var node = _ref3.node,
       options = _ref3.options;
 
   var path = options.source;
   var template = $('#' + options.template).children(0).clone();
+  // TODO: reconciler should allow editing of bound data via event delegation on node
   var reconciler = reconcilers[options.reconciler]({ node: node, template: template });
   pookie.mount(path, reconciler);
 });
 
 /// Flow Preparations
-
 transfusion.on('install.commands', function (object) {
-
-  dataCommand.commands().forEach(function (_ref4) {
-    var node = _ref4.node,
-        commands = _ref4.commands;
-
-    commands.forEach(function (setup) {
-      if (setup.on === 'click') {
-        $(node).on('click', function () {
-          console.info('COMMAND EXECUTION (via click):', setup);
-          transfusion.emit('command.' + setup.command, { node: node, options: setup });
-          ensign.log(setup);
-        });
-      } else {
-        // Instant execution
-        console.info('COMMAND:', setup);
-        transfusion.emit('command.' + setup.command, { node: node, options: setup });
-        ensign.log(setup);
-      }
-    });
-  }); // forEach
 
   /// bogo to transfusion proxy (for uniformity)
   bogo.on('control', function (object) {
@@ -3099,20 +3218,48 @@ transfusion.on('install.commands', function (object) {
   bogo.on('object', function (object) {
     console.log('bogo: object', object);transfusion.emit('server.object', object);
   });
+  bogo.on('objects', function (objects) {
+    console.log('bogo: objects', objects);transfusion.emit('server.objects', objects);
+  });
   bogo.on('error', function (object) {
     transfusion.emit('socket.error', object);
   });
   bogo.on('close', function (object) {
     transfusion.emit('socket.close', object);
   });
+
+  dataCommand.commands().forEach(function (_ref4) {
+    var node = _ref4.node,
+        commands = _ref4.commands;
+
+
+    commands.forEach(function (setup) {
+      console.info('COMMAND:', setup);
+
+      if (setup.on === 'click') {
+        $(node).on('click', function () {
+          console.info('COMMAND EXECUTION (via click):', setup);
+          transfusion.emit('command.' + setup.program, { node: node, options: setup });
+          ensign.log(setup);
+        });
+      } else {
+        // Instant execution
+        transfusion.emit('command.' + setup.program, { node: node, options: setup });
+        ensign.log(setup);
+      }
+    }); // for each command fragment
+  }); // forEach command in DOM
+
 });
 
 transfusion.on('dom.ready', function (object) {
   transfusion.emit('install.commands');
 });
+
 transfusion.on('socket.error', function (object) {
   console.error(object);
 });
+
 transfusion.on('socket.close', function (object) {
 
   console.log(object.code.code, object.code, object.code);
@@ -3138,7 +3285,7 @@ $(function () {
 });
 
 }).call(this,require("buffer").Buffer)
-},{"./reconcile.js":16,"bogo":1,"buffer":18,"data-command":2,"ensign":5,"events":19,"path":21,"pookie":7,"uuid/v4":14}],16:[function(require,module,exports){
+},{"../../bogo":1,"../../data-command":3,"./reconcile.js":17,"buffer":19,"ensign":7,"events":20,"path":22,"pookie":9,"uuid/v4":15}],17:[function(require,module,exports){
 'use strict';
 
 module.exports = function (_ref) {
@@ -3149,6 +3296,10 @@ module.exports = function (_ref) {
   return function (dataList) {
 
     // console.log('Reconciler Called with data list', dataList)
+
+    $(node).on('click', 'li', function () {
+      console.log('delegated click', $(this));
+    });
 
     if (dataList && dataList.forEach) dataList.forEach(function (data) {
       var interpolation = $(template).clone(true);
@@ -3172,7 +3323,7 @@ module.exports = function (_ref) {
   }; // returned function
 };
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -3325,7 +3476,7 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -5063,7 +5214,7 @@ function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":17,"ieee754":20}],19:[function(require,module,exports){
+},{"base64-js":18,"ieee754":21}],20:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5588,7 +5739,7 @@ function functionBindPolyfill(context) {
   };
 }
 
-},{}],20:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = (nBytes * 8) - mLen - 1
@@ -5674,7 +5825,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -5902,7 +6053,7 @@ var substr = 'ab'.substr(-1) === 'b'
 ;
 
 }).call(this,require('_process'))
-},{"_process":22}],22:[function(require,module,exports){
+},{"_process":23}],23:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -6088,4 +6239,4 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}]},{},[15]);
+},{}]},{},[16]);
