@@ -1,4 +1,226 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+(function (Buffer){
+'use strict';
+
+var transfusion = require('../../transfusion/client');
+
+
+var path = require('path');
+var util = require('util');
+
+var port = 8081;
+var vfs = Buffer("IyBNYWluIE9iamVjdHMKCm1ha2UgQXBwbGljYXRpb25zICoKbWFrZSBBcHBsaWNhdGlvbnMvVG9kbyB0b2RvCm1ha2UgQXBwbGljYXRpb25zL1RvZG8vVG9kYXkgdG9kYXkK","base64").toString();
+var reconcilers = {
+  'plain': require('./reconcile.js')
+};
+
+transfusion({ vfs: vfs, reconcilers: reconcilers, port: port });
+
+}).call(this,require("buffer").Buffer)
+},{"../../transfusion/client":3,"./reconcile.js":2,"buffer":20,"path":24,"util":27}],2:[function(require,module,exports){
+'use strict';
+
+module.exports = function (_ref) {
+  var transfusion = _ref.transfusion,
+      node = _ref.node,
+      template = _ref.template;
+
+
+  // $(node).on('click', 'li', function(){
+  //   const uuid = $( this ).attr('id');
+  //   console.log('delegated click on uuid %s', uuid, $( this ))
+  // })
+
+  $(node).on('change', 'input', function () {
+    var uuid = $(this).closest('li').attr('id');
+    var value = $(this).val();
+    console.log('delegated change if input box on uuid %s', uuid, value);
+
+    transfusion.emit('send', { type: 'patch', data: { uuid: uuid } });
+  });
+
+  return function (dataList) {
+
+    if (dataList && dataList.forEach) dataList.forEach(function (data) {
+
+      var interpolation = $(template).clone(true);
+      $(interpolation).attr('id', data.uuid);
+
+      $('*[data-variable]', interpolation).each(function () {
+
+        var key = $(this).data('variable');
+        var value = data[key];
+        var dangerously = $(this).data('dangerously');
+
+        if ($(this).is('input')) {
+          $(this).val(value);
+          $(this).on('change', function () {
+            var text = $(this).val();
+            console.log('delegated change if input box on uuid %s', data.uuid, value, text);
+            transfusion.emit('send', { type: 'storage', data: Object.assign({}, data, { text: text }) });
+          });
+        } else {
+          // Inert Interpolation
+          if (dangerously) {
+            $(this).html(value);
+          } else {
+            $(this).text(value);
+          }
+        }
+      }); //interpolation
+
+      // No merge here, all nodes and events are removed first, then the interpolation is appended.
+      // TODO: sorting is requred
+
+      $('#' + data.uuid, node).remove(); //  In addition to the elements themselves, all bound events and jQuery data associated with the elements are removed.
+      $(node).append(interpolation);
+    }); // for each data in list
+  }; // returned function
+};
+
+},{}],3:[function(require,module,exports){
+module.exports = function (options) {
+
+  /// standard boilerplate with ecosystem components
+  const uuid = require('uuid/v4');
+  const path = require('path');
+  
+
+  const pookie = require('pookie')(options.vfs);
+  const ensign = require('ensign')({});
+
+  const bogo = require('bogo')({ port: 8081, debug: true });
+  const dataCommand = require('data-command')();
+
+  const reconcilers = options.reconcilers;
+
+  const EventEmitter = require('events');
+  class Transfusion extends EventEmitter {}
+  const transfusion = new Transfusion();
+
+  transfusion.on('send', object => {
+    console.log('send triggered bogo reply', object);
+    bogo.emit('reply', object);
+  });
+
+  transfusion.on('server.control', object => {
+    if (object.command === 'reload') window.location.reload(true);
+  });
+
+  transfusion.on('server.object', object => {
+    console.log('server.object', object);
+    pookie.pipe(object); // insert object into pookie
+  });
+
+  transfusion.on('server.objects', objects => {
+    console.log('server.objects', objects);
+    objects.map(object => pookie.pipe(object));
+  });
+
+  /// Register Commands
+
+  transfusion.on('command.clog', ({ node, options }) => {
+    console.dir(ensign.log());
+  });
+
+  transfusion.on('command.create', ({ node, options }) => {
+    const task = {
+      uuid: options.uuid || uuid(),
+      version: 1,
+      tags: 'todo,today,bork',
+      text: options.text || "Untitled Task"
+    };
+    console.log('Create Action Called...:', options, task);
+
+    transfusion.emit('send', { type: 'storage', data: task });
+  });
+
+  transfusion.on('command.load', () => {
+    console.log('command.load triggered dispatching send');
+    transfusion.emit('send', { type: 'load' });
+  });
+
+  transfusion.on('command.stream', ({ node, options }) => {
+    const path = options.source;
+    const template = $(`#${options.template}`).children(0).clone();
+    // TODO: reconciler should allow editing of bound data via event delegation on node
+    const reconciler = reconcilers[options.reconciler]({ transfusion, node, template });
+    pookie.mount(path, reconciler);
+  });
+
+  /// Flow Preparations
+  transfusion.on('install.commands', object => {
+
+    /// bogo to transfusion proxy (for uniformity)
+    bogo.on('control', function (object) {
+      transfusion.emit('server.control', object);
+    });
+    bogo.on('object', function (object) {
+      console.log('bogo: object', object);transfusion.emit('server.object', object);
+    });
+    bogo.on('objects', function (objects) {
+      console.log('bogo: objects', objects);transfusion.emit('server.objects', objects);
+    });
+    bogo.on('error', function (object) {
+      transfusion.emit('socket.error', object);
+    });
+    bogo.on('close', function (object) {
+      transfusion.emit('socket.close', object);
+    });
+
+    dataCommand.commands().forEach(function ({ node, commands }) {
+
+      commands.forEach(function (setup) {
+        console.info('COMMAND:', setup);
+
+        if (setup.on === 'click') {
+          $(node).on('click', function () {
+            console.info('COMMAND EXECUTION (via click):', setup);
+            transfusion.emit(`command.${setup.program}`, { node, options: setup });
+            ensign.log(setup);
+          });
+        } else {
+          // Instant execution
+          transfusion.emit(`command.${setup.program}`, { node, options: setup });
+          ensign.log(setup);
+        }
+      }); // for each command fragment
+    }); // forEach command in DOM
+
+  });
+
+  transfusion.on('dom.ready', object => {
+    transfusion.emit('install.commands');
+  });
+
+  transfusion.on('socket.error', object => {
+    console.error(object);
+  });
+
+  transfusion.on('socket.close', object => {
+
+    console.log(object.code.code, object.code, object.code);
+
+    if (object.code.code == 1006) {
+      // Server Down
+      console.info('socket.close: Server Restart/Down');
+      setTimeout(() => location.reload(true), 6000);
+    } else if (object.code.code == 1001) {
+      // user reload
+      console.info('socket.close: User Reload');
+    } else {
+      console.info('socket.close:', object);
+    }
+  });
+
+  /// Boot Transfusion
+
+  $(function () {
+    transfusion.emit('dom.ready');
+  });
+};
+
+},{"bogo":4,"data-command":5,"ensign":7,"events":21,"path":24,"pookie":10,"uuid/v4":18}],4:[function(require,module,exports){
 const EventEmitter = require('events');
 const Retry = require('retry-again');
 const WebSocketStates = {
@@ -87,7 +309,7 @@ module.exports = function({port=8081, debug=false}){
   return bogo;
 }
 
-},{"events":20,"retry-again":11}],2:[function(require,module,exports){
+},{"events":21,"retry-again":14}],5:[function(require,module,exports){
 const sizzle = require('sizzle');
 const minimist = require('minimist');
 
@@ -141,7 +363,70 @@ module.exports = function(options){
 
 }
 
-},{"minimist":3,"sizzle":12}],3:[function(require,module,exports){
+},{"minimist":8,"sizzle":15}],6:[function(require,module,exports){
+module.exports = function(options){
+
+  const db = new Map();
+  const track = new Map();
+
+  return {
+    set: function(path, object){
+
+      if( track.has(path) ){
+      }else{
+        track.set(path, new Set())
+      }
+      track.get(path).add(object.uuid)
+
+        if(db.has(object.uuid)){
+          // Object Exists
+          if(object.version > db.get(object.uuid).version ){
+            // Incoming has an older version
+            db.set(object.uuid, object);
+            return true; // a change has occured in the dataset
+          }
+        }else{
+          // First-time Storage
+          db.set(object.uuid, object);
+          return true; // a change has occured in the dataset
+        }
+     },
+    get: function(uuid){
+       return db.get(uuid);
+     },
+    all: function(path){
+      const all = track.has(path)?Array.from(track.get(path)).map(id=>db.get(id)):[];
+      return all.filter(i=> !!(i.deleted) === false )
+     },
+  };
+
+}
+
+},{}],7:[function(require,module,exports){
+module.exports = function(options){
+
+  const db = [];
+
+  const log = function(command){
+
+    if(command) db.push(command);
+
+    return db;
+
+  }
+
+  const replay = function(log, commands, data){
+
+  }
+
+  return {
+    log,
+    replay,
+  }
+
+}
+
+},{}],8:[function(require,module,exports){
 module.exports = function (args, opts) {
     if (!opts) opts = {};
     
@@ -379,70 +664,7 @@ function isNumber (x) {
 }
 
 
-},{}],4:[function(require,module,exports){
-module.exports = function(options){
-
-  const db = new Map();
-  const track = new Map();
-
-  return {
-    set: function(path, object){
-
-      if( track.has(path) ){
-      }else{
-        track.set(path, new Set())
-      }
-      track.get(path).add(object.uuid)
-
-        if(db.has(object.uuid)){
-          // Object Exists
-          if(object.version > db.get(object.uuid).version ){
-            // Incoming has an older version
-            db.set(object.uuid, object);
-            return true; // a change has occured in the dataset
-          }
-        }else{
-          // First-time Storage
-          db.set(object.uuid, object);
-          return true; // a change has occured in the dataset
-        }
-     },
-    get: function(uuid){
-       return db.get(uuid);
-     },
-    all: function(path){
-      const all = track.has(path)?Array.from(track.get(path)).map(id=>db.get(id)):[];
-      return all.filter(i=> !!(i.deleted) === false )
-     },
-  };
-
-}
-
-},{}],5:[function(require,module,exports){
-module.exports = function(options){
-
-  const db = [];
-
-  const log = function(command){
-
-    if(command) db.push(command);
-
-    return db;
-
-  }
-
-  const replay = function(log, commands, data){
-
-  }
-
-  return {
-    log,
-    replay,
-  }
-
-}
-
-},{}],6:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 
 const Tree = require('./lib/Tree.js')
 const Root = require('./lib/Root.js')
@@ -450,7 +672,7 @@ const Branch = require('./lib/Branch.js')
 
 module.exports = {Tree, Root, Branch};
 
-},{"./lib/Branch.js":8,"./lib/Root.js":9,"./lib/Tree.js":10}],7:[function(require,module,exports){
+},{"./lib/Branch.js":11,"./lib/Root.js":12,"./lib/Tree.js":13}],10:[function(require,module,exports){
 const enbuffer = require('../enbuffer')();
 
 const {Tree, Root, Branch} = require('./core.js');
@@ -501,7 +723,7 @@ module.exports = function(vfs){
   } // return object
 } // main
 
-},{"../enbuffer":4,"./core.js":6}],8:[function(require,module,exports){
+},{"../enbuffer":6,"./core.js":9}],11:[function(require,module,exports){
 const EventEmitter = require('events');
 
 class Branch  extends EventEmitter {
@@ -611,7 +833,7 @@ class Branch  extends EventEmitter {
 
 module.exports = Branch;
 
-},{"events":20}],9:[function(require,module,exports){
+},{"events":21}],12:[function(require,module,exports){
 
 const Branch = require('./Branch.js');
 
@@ -624,7 +846,7 @@ class Root extends Branch {
 
 module.exports = Root;
 
-},{"./Branch.js":8}],10:[function(require,module,exports){
+},{"./Branch.js":11}],13:[function(require,module,exports){
 // This is a Utility Object like Math or Array
 
 const Root = require('./Root.js');
@@ -662,7 +884,7 @@ const Tree = {
 
 module.exports = Tree;
 
-},{"./Branch.js":8,"./Root.js":9}],11:[function(require,module,exports){
+},{"./Branch.js":11,"./Root.js":12}],14:[function(require,module,exports){
 
 class Retry {
 
@@ -713,7 +935,7 @@ class Retry {
 
 module.exports = Retry;
 
-},{}],12:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 /*!
  * Sizzle CSS Selector Engine v2.3.3
  * https://sizzlejs.com/
@@ -2987,7 +3209,7 @@ if ( typeof define === "function" && define.amd ) {
 
 })( window );
 
-},{}],13:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 /**
  * Convert array of 16 byte values to UUID string format of the form:
  * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
@@ -3013,7 +3235,7 @@ function bytesToUuid(buf, offset) {
 
 module.exports = bytesToUuid;
 
-},{}],14:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 // Unique ID creation requires a high quality random # generator.  In the
 // browser this is a little complicated due to unknown quality of Math.random()
 // and inconsistent support for the `crypto` API.  We do the best we can via
@@ -3049,7 +3271,7 @@ if (getRandomValues) {
   };
 }
 
-},{}],15:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 var rng = require('./lib/rng');
 var bytesToUuid = require('./lib/bytesToUuid');
 
@@ -3080,248 +3302,7 @@ function v4(options, buf, offset) {
 
 module.exports = v4;
 
-},{"./lib/bytesToUuid":13,"./lib/rng":14}],16:[function(require,module,exports){
-(function (Buffer){
-'use strict';
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-/// standard boilerplate with ecosystem components
-var uuid = require('uuid/v4');
-var path = require('path');
-
-
-var vfs = Buffer("IyBNYWluIE9iamVjdHMKCm1ha2UgQXBwbGljYXRpb25zICoKbWFrZSBBcHBsaWNhdGlvbnMvVG9kbyB0b2RvCm1ha2UgQXBwbGljYXRpb25zL1RvZG8vVG9kYXkgdG9kYXkK","base64").toString();
-var pookie = require('pookie')(vfs);
-var ensign = require('ensign')({});
-
-var bogo = require('bogo')({ port: 8081, debug: true });
-var dataCommand = require('data-command')();
-
-var reconcilers = {
-  'plain': require('./reconcile.js')
-};
-
-var EventEmitter = require('events');
-
-var Transfusion = function (_EventEmitter) {
-  _inherits(Transfusion, _EventEmitter);
-
-  function Transfusion() {
-    _classCallCheck(this, Transfusion);
-
-    return _possibleConstructorReturn(this, (Transfusion.__proto__ || Object.getPrototypeOf(Transfusion)).apply(this, arguments));
-  }
-
-  return Transfusion;
-}(EventEmitter);
-
-var transfusion = new Transfusion();
-
-transfusion.on('send', function (object) {
-  console.log('send triggered bogo reply', object);
-  bogo.emit('reply', object);
-});
-
-transfusion.on('server.control', function (object) {
-  if (object.command === 'reload') window.location.reload(true);
-});
-
-transfusion.on('server.object', function (object) {
-  console.log('server.object', object);
-  pookie.pipe(object); // insert object into pookie
-});
-
-transfusion.on('server.objects', function (objects) {
-  console.log('server.objects', objects);
-  objects.map(function (object) {
-    return pookie.pipe(object);
-  });
-});
-
-/// Register Commands
-
-transfusion.on('command.clog', function (_ref) {
-  var node = _ref.node,
-      options = _ref.options;
-
-  console.dir(ensign.log());
-});
-
-transfusion.on('command.create', function (_ref2) {
-  var node = _ref2.node,
-      options = _ref2.options;
-
-  var task = {
-    uuid: options.uuid || uuid(),
-    version: 1,
-    tags: 'todo,today,bork',
-    text: options.text || "Untitled Task"
-  };
-  console.log('Create Action Called...:', options, task);
-
-  transfusion.emit('send', { type: 'storage', data: task });
-});
-
-transfusion.on('command.load', function () {
-  console.log('command.load triggered dispatching send');
-  transfusion.emit('send', { type: 'load' });
-});
-
-transfusion.on('command.stream', function (_ref3) {
-  var node = _ref3.node,
-      options = _ref3.options;
-
-  var path = options.source;
-  var template = $('#' + options.template).children(0).clone();
-  // TODO: reconciler should allow editing of bound data via event delegation on node
-  var reconciler = reconcilers[options.reconciler]({ transfusion: transfusion, node: node, template: template });
-  pookie.mount(path, reconciler);
-});
-
-/// Flow Preparations
-transfusion.on('install.commands', function (object) {
-
-  /// bogo to transfusion proxy (for uniformity)
-  bogo.on('control', function (object) {
-    transfusion.emit('server.control', object);
-  });
-  bogo.on('object', function (object) {
-    console.log('bogo: object', object);transfusion.emit('server.object', object);
-  });
-  bogo.on('objects', function (objects) {
-    console.log('bogo: objects', objects);transfusion.emit('server.objects', objects);
-  });
-  bogo.on('error', function (object) {
-    transfusion.emit('socket.error', object);
-  });
-  bogo.on('close', function (object) {
-    transfusion.emit('socket.close', object);
-  });
-
-  dataCommand.commands().forEach(function (_ref4) {
-    var node = _ref4.node,
-        commands = _ref4.commands;
-
-
-    commands.forEach(function (setup) {
-      console.info('COMMAND:', setup);
-
-      if (setup.on === 'click') {
-        $(node).on('click', function () {
-          console.info('COMMAND EXECUTION (via click):', setup);
-          transfusion.emit('command.' + setup.program, { node: node, options: setup });
-          ensign.log(setup);
-        });
-      } else {
-        // Instant execution
-        transfusion.emit('command.' + setup.program, { node: node, options: setup });
-        ensign.log(setup);
-      }
-    }); // for each command fragment
-  }); // forEach command in DOM
-
-});
-
-transfusion.on('dom.ready', function (object) {
-  transfusion.emit('install.commands');
-});
-
-transfusion.on('socket.error', function (object) {
-  console.error(object);
-});
-
-transfusion.on('socket.close', function (object) {
-
-  console.log(object.code.code, object.code, object.code);
-
-  if (object.code.code == 1006) {
-    // Server Down
-    console.info('socket.close: Server Restart/Down');
-    setTimeout(function () {
-      return location.reload(true);
-    }, 6000);
-  } else if (object.code.code == 1001) {
-    // user reload
-    console.info('socket.close: User Reload');
-  } else {
-    console.info('socket.close:', object);
-  }
-});
-
-/// Boot Transfusion
-
-$(function () {
-  transfusion.emit('dom.ready');
-});
-
-}).call(this,require("buffer").Buffer)
-},{"./reconcile.js":17,"bogo":1,"buffer":19,"data-command":2,"ensign":5,"events":20,"path":22,"pookie":7,"uuid/v4":15}],17:[function(require,module,exports){
-'use strict';
-
-module.exports = function (_ref) {
-  var transfusion = _ref.transfusion,
-      node = _ref.node,
-      template = _ref.template;
-
-
-  // $(node).on('click', 'li', function(){
-  //   const uuid = $( this ).attr('id');
-  //   console.log('delegated click on uuid %s', uuid, $( this ))
-  // })
-
-  $(node).on('change', 'input', function () {
-    var uuid = $(this).closest('li').attr('id');
-    var value = $(this).val();
-    console.log('delegated change if input box on uuid %s', uuid, value);
-
-    transfusion.emit('send', { type: 'patch', data: { uuid: uuid } });
-  });
-
-  return function (dataList) {
-
-    if (dataList && dataList.forEach) dataList.forEach(function (data) {
-
-      var interpolation = $(template).clone(true);
-      $(interpolation).attr('id', data.uuid);
-
-      $('*[data-variable]', interpolation).each(function () {
-
-        var key = $(this).data('variable');
-        var value = data[key];
-        var dangerously = $(this).data('dangerously');
-
-        if ($(this).is('input')) {
-          $(this).val(value);
-          $(this).on('change', function () {
-            var text = $(this).val();
-            console.log('delegated change if input box on uuid %s', data.uuid, value, text);
-            transfusion.emit('send', { type: 'storage', data: Object.assign({}, data, { text: text }) });
-          });
-        } else {
-          // Inert Interpolation
-          if (dangerously) {
-            $(this).html(value);
-          } else {
-            $(this).text(value);
-          }
-        }
-      }); //interpolation
-
-      // No merge here, all nodes and events are removed first, then the interpolation is appended.
-      // TODO: sorting is requred
-
-      $('#' + data.uuid, node).remove(); //  In addition to the elements themselves, all bound events and jQuery data associated with the elements are removed.
-      $(node).append(interpolation);
-    }); // for each data in list
-  }; // returned function
-};
-
-},{}],18:[function(require,module,exports){
+},{"./lib/bytesToUuid":16,"./lib/rng":17}],19:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -3474,7 +3455,7 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -5212,7 +5193,7 @@ function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":18,"ieee754":21}],20:[function(require,module,exports){
+},{"base64-js":19,"ieee754":22}],21:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5737,7 +5718,7 @@ function functionBindPolyfill(context) {
   };
 }
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = (nBytes * 8) - mLen - 1
@@ -5823,7 +5804,32 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
+if (typeof Object.create === 'function') {
+  // implementation from standard node.js 'util' module
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    ctor.prototype = Object.create(superCtor.prototype, {
+      constructor: {
+        value: ctor,
+        enumerable: false,
+        writable: true,
+        configurable: true
+      }
+    });
+  };
+} else {
+  // old school shim for old browsers
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    var TempCtor = function () {}
+    TempCtor.prototype = superCtor.prototype
+    ctor.prototype = new TempCtor()
+    ctor.prototype.constructor = ctor
+  }
+}
+
+},{}],24:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -6051,7 +6057,7 @@ var substr = 'ab'.substr(-1) === 'b'
 ;
 
 }).call(this,require('_process'))
-},{"_process":23}],23:[function(require,module,exports){
+},{"_process":25}],25:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -6237,4 +6243,601 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}]},{},[16]);
+},{}],26:[function(require,module,exports){
+module.exports = function isBuffer(arg) {
+  return arg && typeof arg === 'object'
+    && typeof arg.copy === 'function'
+    && typeof arg.fill === 'function'
+    && typeof arg.readUInt8 === 'function';
+}
+},{}],27:[function(require,module,exports){
+(function (process,global){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var formatRegExp = /%[sdj%]/g;
+exports.format = function(f) {
+  if (!isString(f)) {
+    var objects = [];
+    for (var i = 0; i < arguments.length; i++) {
+      objects.push(inspect(arguments[i]));
+    }
+    return objects.join(' ');
+  }
+
+  var i = 1;
+  var args = arguments;
+  var len = args.length;
+  var str = String(f).replace(formatRegExp, function(x) {
+    if (x === '%%') return '%';
+    if (i >= len) return x;
+    switch (x) {
+      case '%s': return String(args[i++]);
+      case '%d': return Number(args[i++]);
+      case '%j':
+        try {
+          return JSON.stringify(args[i++]);
+        } catch (_) {
+          return '[Circular]';
+        }
+      default:
+        return x;
+    }
+  });
+  for (var x = args[i]; i < len; x = args[++i]) {
+    if (isNull(x) || !isObject(x)) {
+      str += ' ' + x;
+    } else {
+      str += ' ' + inspect(x);
+    }
+  }
+  return str;
+};
+
+
+// Mark that a method should not be used.
+// Returns a modified function which warns once by default.
+// If --no-deprecation is set, then it is a no-op.
+exports.deprecate = function(fn, msg) {
+  // Allow for deprecating things in the process of starting up.
+  if (isUndefined(global.process)) {
+    return function() {
+      return exports.deprecate(fn, msg).apply(this, arguments);
+    };
+  }
+
+  if (process.noDeprecation === true) {
+    return fn;
+  }
+
+  var warned = false;
+  function deprecated() {
+    if (!warned) {
+      if (process.throwDeprecation) {
+        throw new Error(msg);
+      } else if (process.traceDeprecation) {
+        console.trace(msg);
+      } else {
+        console.error(msg);
+      }
+      warned = true;
+    }
+    return fn.apply(this, arguments);
+  }
+
+  return deprecated;
+};
+
+
+var debugs = {};
+var debugEnviron;
+exports.debuglog = function(set) {
+  if (isUndefined(debugEnviron))
+    debugEnviron = process.env.NODE_DEBUG || '';
+  set = set.toUpperCase();
+  if (!debugs[set]) {
+    if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
+      var pid = process.pid;
+      debugs[set] = function() {
+        var msg = exports.format.apply(exports, arguments);
+        console.error('%s %d: %s', set, pid, msg);
+      };
+    } else {
+      debugs[set] = function() {};
+    }
+  }
+  return debugs[set];
+};
+
+
+/**
+ * Echos the value of a value. Trys to print the value out
+ * in the best way possible given the different types.
+ *
+ * @param {Object} obj The object to print out.
+ * @param {Object} opts Optional options object that alters the output.
+ */
+/* legacy: obj, showHidden, depth, colors*/
+function inspect(obj, opts) {
+  // default options
+  var ctx = {
+    seen: [],
+    stylize: stylizeNoColor
+  };
+  // legacy...
+  if (arguments.length >= 3) ctx.depth = arguments[2];
+  if (arguments.length >= 4) ctx.colors = arguments[3];
+  if (isBoolean(opts)) {
+    // legacy...
+    ctx.showHidden = opts;
+  } else if (opts) {
+    // got an "options" object
+    exports._extend(ctx, opts);
+  }
+  // set default options
+  if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
+  if (isUndefined(ctx.depth)) ctx.depth = 2;
+  if (isUndefined(ctx.colors)) ctx.colors = false;
+  if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
+  if (ctx.colors) ctx.stylize = stylizeWithColor;
+  return formatValue(ctx, obj, ctx.depth);
+}
+exports.inspect = inspect;
+
+
+// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
+inspect.colors = {
+  'bold' : [1, 22],
+  'italic' : [3, 23],
+  'underline' : [4, 24],
+  'inverse' : [7, 27],
+  'white' : [37, 39],
+  'grey' : [90, 39],
+  'black' : [30, 39],
+  'blue' : [34, 39],
+  'cyan' : [36, 39],
+  'green' : [32, 39],
+  'magenta' : [35, 39],
+  'red' : [31, 39],
+  'yellow' : [33, 39]
+};
+
+// Don't use 'blue' not visible on cmd.exe
+inspect.styles = {
+  'special': 'cyan',
+  'number': 'yellow',
+  'boolean': 'yellow',
+  'undefined': 'grey',
+  'null': 'bold',
+  'string': 'green',
+  'date': 'magenta',
+  // "name": intentionally not styling
+  'regexp': 'red'
+};
+
+
+function stylizeWithColor(str, styleType) {
+  var style = inspect.styles[styleType];
+
+  if (style) {
+    return '\u001b[' + inspect.colors[style][0] + 'm' + str +
+           '\u001b[' + inspect.colors[style][1] + 'm';
+  } else {
+    return str;
+  }
+}
+
+
+function stylizeNoColor(str, styleType) {
+  return str;
+}
+
+
+function arrayToHash(array) {
+  var hash = {};
+
+  array.forEach(function(val, idx) {
+    hash[val] = true;
+  });
+
+  return hash;
+}
+
+
+function formatValue(ctx, value, recurseTimes) {
+  // Provide a hook for user-specified inspect functions.
+  // Check that value is an object with an inspect function on it
+  if (ctx.customInspect &&
+      value &&
+      isFunction(value.inspect) &&
+      // Filter out the util module, it's inspect function is special
+      value.inspect !== exports.inspect &&
+      // Also filter out any prototype objects using the circular check.
+      !(value.constructor && value.constructor.prototype === value)) {
+    var ret = value.inspect(recurseTimes, ctx);
+    if (!isString(ret)) {
+      ret = formatValue(ctx, ret, recurseTimes);
+    }
+    return ret;
+  }
+
+  // Primitive types cannot have properties
+  var primitive = formatPrimitive(ctx, value);
+  if (primitive) {
+    return primitive;
+  }
+
+  // Look up the keys of the object.
+  var keys = Object.keys(value);
+  var visibleKeys = arrayToHash(keys);
+
+  if (ctx.showHidden) {
+    keys = Object.getOwnPropertyNames(value);
+  }
+
+  // IE doesn't make error fields non-enumerable
+  // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
+  if (isError(value)
+      && (keys.indexOf('message') >= 0 || keys.indexOf('description') >= 0)) {
+    return formatError(value);
+  }
+
+  // Some type of object without properties can be shortcutted.
+  if (keys.length === 0) {
+    if (isFunction(value)) {
+      var name = value.name ? ': ' + value.name : '';
+      return ctx.stylize('[Function' + name + ']', 'special');
+    }
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    }
+    if (isDate(value)) {
+      return ctx.stylize(Date.prototype.toString.call(value), 'date');
+    }
+    if (isError(value)) {
+      return formatError(value);
+    }
+  }
+
+  var base = '', array = false, braces = ['{', '}'];
+
+  // Make Array say that they are Array
+  if (isArray(value)) {
+    array = true;
+    braces = ['[', ']'];
+  }
+
+  // Make functions say that they are functions
+  if (isFunction(value)) {
+    var n = value.name ? ': ' + value.name : '';
+    base = ' [Function' + n + ']';
+  }
+
+  // Make RegExps say that they are RegExps
+  if (isRegExp(value)) {
+    base = ' ' + RegExp.prototype.toString.call(value);
+  }
+
+  // Make dates with properties first say the date
+  if (isDate(value)) {
+    base = ' ' + Date.prototype.toUTCString.call(value);
+  }
+
+  // Make error with message first say the error
+  if (isError(value)) {
+    base = ' ' + formatError(value);
+  }
+
+  if (keys.length === 0 && (!array || value.length == 0)) {
+    return braces[0] + base + braces[1];
+  }
+
+  if (recurseTimes < 0) {
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    } else {
+      return ctx.stylize('[Object]', 'special');
+    }
+  }
+
+  ctx.seen.push(value);
+
+  var output;
+  if (array) {
+    output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
+  } else {
+    output = keys.map(function(key) {
+      return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
+    });
+  }
+
+  ctx.seen.pop();
+
+  return reduceToSingleString(output, base, braces);
+}
+
+
+function formatPrimitive(ctx, value) {
+  if (isUndefined(value))
+    return ctx.stylize('undefined', 'undefined');
+  if (isString(value)) {
+    var simple = '\'' + JSON.stringify(value).replace(/^"|"$/g, '')
+                                             .replace(/'/g, "\\'")
+                                             .replace(/\\"/g, '"') + '\'';
+    return ctx.stylize(simple, 'string');
+  }
+  if (isNumber(value))
+    return ctx.stylize('' + value, 'number');
+  if (isBoolean(value))
+    return ctx.stylize('' + value, 'boolean');
+  // For some reason typeof null is "object", so special case here.
+  if (isNull(value))
+    return ctx.stylize('null', 'null');
+}
+
+
+function formatError(value) {
+  return '[' + Error.prototype.toString.call(value) + ']';
+}
+
+
+function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
+  var output = [];
+  for (var i = 0, l = value.length; i < l; ++i) {
+    if (hasOwnProperty(value, String(i))) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          String(i), true));
+    } else {
+      output.push('');
+    }
+  }
+  keys.forEach(function(key) {
+    if (!key.match(/^\d+$/)) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          key, true));
+    }
+  });
+  return output;
+}
+
+
+function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
+  var name, str, desc;
+  desc = Object.getOwnPropertyDescriptor(value, key) || { value: value[key] };
+  if (desc.get) {
+    if (desc.set) {
+      str = ctx.stylize('[Getter/Setter]', 'special');
+    } else {
+      str = ctx.stylize('[Getter]', 'special');
+    }
+  } else {
+    if (desc.set) {
+      str = ctx.stylize('[Setter]', 'special');
+    }
+  }
+  if (!hasOwnProperty(visibleKeys, key)) {
+    name = '[' + key + ']';
+  }
+  if (!str) {
+    if (ctx.seen.indexOf(desc.value) < 0) {
+      if (isNull(recurseTimes)) {
+        str = formatValue(ctx, desc.value, null);
+      } else {
+        str = formatValue(ctx, desc.value, recurseTimes - 1);
+      }
+      if (str.indexOf('\n') > -1) {
+        if (array) {
+          str = str.split('\n').map(function(line) {
+            return '  ' + line;
+          }).join('\n').substr(2);
+        } else {
+          str = '\n' + str.split('\n').map(function(line) {
+            return '   ' + line;
+          }).join('\n');
+        }
+      }
+    } else {
+      str = ctx.stylize('[Circular]', 'special');
+    }
+  }
+  if (isUndefined(name)) {
+    if (array && key.match(/^\d+$/)) {
+      return str;
+    }
+    name = JSON.stringify('' + key);
+    if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
+      name = name.substr(1, name.length - 2);
+      name = ctx.stylize(name, 'name');
+    } else {
+      name = name.replace(/'/g, "\\'")
+                 .replace(/\\"/g, '"')
+                 .replace(/(^"|"$)/g, "'");
+      name = ctx.stylize(name, 'string');
+    }
+  }
+
+  return name + ': ' + str;
+}
+
+
+function reduceToSingleString(output, base, braces) {
+  var numLinesEst = 0;
+  var length = output.reduce(function(prev, cur) {
+    numLinesEst++;
+    if (cur.indexOf('\n') >= 0) numLinesEst++;
+    return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
+  }, 0);
+
+  if (length > 60) {
+    return braces[0] +
+           (base === '' ? '' : base + '\n ') +
+           ' ' +
+           output.join(',\n  ') +
+           ' ' +
+           braces[1];
+  }
+
+  return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];
+}
+
+
+// NOTE: These type checking functions intentionally don't use `instanceof`
+// because it is fragile and can be easily faked with `Object.create()`.
+function isArray(ar) {
+  return Array.isArray(ar);
+}
+exports.isArray = isArray;
+
+function isBoolean(arg) {
+  return typeof arg === 'boolean';
+}
+exports.isBoolean = isBoolean;
+
+function isNull(arg) {
+  return arg === null;
+}
+exports.isNull = isNull;
+
+function isNullOrUndefined(arg) {
+  return arg == null;
+}
+exports.isNullOrUndefined = isNullOrUndefined;
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+exports.isNumber = isNumber;
+
+function isString(arg) {
+  return typeof arg === 'string';
+}
+exports.isString = isString;
+
+function isSymbol(arg) {
+  return typeof arg === 'symbol';
+}
+exports.isSymbol = isSymbol;
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+exports.isUndefined = isUndefined;
+
+function isRegExp(re) {
+  return isObject(re) && objectToString(re) === '[object RegExp]';
+}
+exports.isRegExp = isRegExp;
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+exports.isObject = isObject;
+
+function isDate(d) {
+  return isObject(d) && objectToString(d) === '[object Date]';
+}
+exports.isDate = isDate;
+
+function isError(e) {
+  return isObject(e) &&
+      (objectToString(e) === '[object Error]' || e instanceof Error);
+}
+exports.isError = isError;
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+exports.isFunction = isFunction;
+
+function isPrimitive(arg) {
+  return arg === null ||
+         typeof arg === 'boolean' ||
+         typeof arg === 'number' ||
+         typeof arg === 'string' ||
+         typeof arg === 'symbol' ||  // ES6 symbol
+         typeof arg === 'undefined';
+}
+exports.isPrimitive = isPrimitive;
+
+exports.isBuffer = require('./support/isBuffer');
+
+function objectToString(o) {
+  return Object.prototype.toString.call(o);
+}
+
+
+function pad(n) {
+  return n < 10 ? '0' + n.toString(10) : n.toString(10);
+}
+
+
+var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
+              'Oct', 'Nov', 'Dec'];
+
+// 26 Feb 16:19:34
+function timestamp() {
+  var d = new Date();
+  var time = [pad(d.getHours()),
+              pad(d.getMinutes()),
+              pad(d.getSeconds())].join(':');
+  return [d.getDate(), months[d.getMonth()], time].join(' ');
+}
+
+
+// log is just a thin wrapper to console.log that prepends a timestamp
+exports.log = function() {
+  console.log('%s - %s', timestamp(), exports.format.apply(exports, arguments));
+};
+
+
+/**
+ * Inherit the prototype methods from one constructor into another.
+ *
+ * The Function.prototype.inherits from lang.js rewritten as a standalone
+ * function (not on Function.prototype). NOTE: If this file is to be loaded
+ * during bootstrapping this function needs to be rewritten using some native
+ * functions as prototype setup using normal JavaScript does not work as
+ * expected during bootstrapping (see mirror.js in r114903).
+ *
+ * @param {function} ctor Constructor function which needs to inherit the
+ *     prototype.
+ * @param {function} superCtor Constructor function to inherit prototype from.
+ */
+exports.inherits = require('inherits');
+
+exports._extend = function(origin, add) {
+  // Don't do anything if add isn't an object
+  if (!add || !isObject(add)) return origin;
+
+  var keys = Object.keys(add);
+  var i = keys.length;
+  while (i--) {
+    origin[keys[i]] = add[keys[i]];
+  }
+  return origin;
+};
+
+function hasOwnProperty(obj, prop) {
+  return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./support/isBuffer":26,"_process":25,"inherits":23}]},{},[1]);
