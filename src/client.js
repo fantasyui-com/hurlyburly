@@ -14,10 +14,6 @@ const reconcilers = {
   'plain': require('./reconcile.js')
 }
 
-
-/// Prepare node's standard emitter
-/// and create the transfusion system
-
 const EventEmitter = require('events');
 class Transfusion extends EventEmitter {}
 const transfusion = new Transfusion();
@@ -70,7 +66,7 @@ transfusion.on('command.stream', ({node, options}) => {
   const path = options.source;
   const template = $(`#${options.template}`).children(0).clone();
   // TODO: reconciler should allow editing of bound data via event delegation on node
-  const reconciler = reconcilers[options.reconciler]({node, template});
+  const reconciler = reconcilers[options.reconciler]({transfusion, node, template});
   pookie.mount(path, reconciler);
 });
 

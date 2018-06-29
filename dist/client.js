@@ -3127,11 +3127,9 @@ var dataCommand = require('../../data-command')();
 
 var reconcilers = {
   'plain': require('./reconcile.js')
+};
 
-  /// Prepare node's standard emitter
-  /// and create the transfusion system
-
-};var EventEmitter = require('events');
+var EventEmitter = require('events');
 
 var Transfusion = function (_EventEmitter) {
   _inherits(Transfusion, _EventEmitter);
@@ -3204,7 +3202,7 @@ transfusion.on('command.stream', function (_ref3) {
   var path = options.source;
   var template = $('#' + options.template).children(0).clone();
   // TODO: reconciler should allow editing of bound data via event delegation on node
-  var reconciler = reconcilers[options.reconciler]({ node: node, template: template });
+  var reconciler = reconcilers[options.reconciler]({ transfusion: transfusion, node: node, template: template });
   pookie.mount(path, reconciler);
 });
 
@@ -3289,36 +3287,59 @@ $(function () {
 'use strict';
 
 module.exports = function (_ref) {
-  var node = _ref.node,
+  var transfusion = _ref.transfusion,
+      node = _ref.node,
       template = _ref.template;
 
 
+  // $(node).on('click', 'li', function(){
+  //   const uuid = $( this ).attr('id');
+  //   console.log('delegated click on uuid %s', uuid, $( this ))
+  // })
+
+  $(node).on('change', 'input', function () {
+    var uuid = $(this).closest('li').attr('id');
+    var value = $(this).val();
+    console.log('delegated change if input box on uuid %s', uuid, value);
+
+    transfusion.emit('send', { type: 'patch', data: { uuid: uuid } });
+  });
+
   return function (dataList) {
 
-    // console.log('Reconciler Called with data list', dataList)
-
-    $(node).on('click', 'li', function () {
-      console.log('delegated click', $(this));
-    });
-
     if (dataList && dataList.forEach) dataList.forEach(function (data) {
+
       var interpolation = $(template).clone(true);
       $(interpolation).attr('id', data.uuid);
+
       $('*[data-variable]', interpolation).each(function () {
+
         var key = $(this).data('variable');
         var value = data[key];
-        if ($(this).data('dangerously')) {
-          $(this).html(value);
+        var dangerously = $(this).data('dangerously');
+
+        if ($(this).is('input')) {
+          $(this).val(value);
+          $(this).on('change', function () {
+            var text = $(this).val();
+            console.log('delegated change if input box on uuid %s', data.uuid, value, text);
+            transfusion.emit('send', { type: 'storage', data: Object.assign({}, data, { text: text }) });
+          });
         } else {
-          $(this).text(value);
+          // Inert Interpolation
+          if (dangerously) {
+            $(this).html(value);
+          } else {
+            $(this).text(value);
+          }
         }
       }); //interpolation
-      var selection = $('#' + data.uuid, node);
-      if (selection.length) {
-        selection.replaceWith(interpolation);
-      } else {
-        $(node).append(interpolation);
-      }
+
+      // No merge here, all nodes and events are removed first, then the interpolation is appended.
+      // TODO: sorting is requred
+
+      $('#' + data.uuid, node).remove(); //  In addition to the elements themselves, all bound events and jQuery data associated with the elements are removed.
+      $(node).append(interpolation);
     }); // for each data in list
   }; // returned function
 };
