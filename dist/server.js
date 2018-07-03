@@ -1,4 +1,4 @@
-const transfusion = require('../../transfusion/server');
+const transfusion = require('transfusion/server');
 
 const fs = require('fs');
 const path = require('path');
