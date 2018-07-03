@@ -4,7 +4,7 @@
   "description": "Todo Application based on pookie object tree database.",
   "main": "index.js",
   "scripts": {
-    "build": "build.sh"
+    "build": "bin/build.sh"
   },
   "repository": {
     "type": "git",
