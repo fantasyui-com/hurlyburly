@@ -18,7 +18,7 @@
   },
   "homepage": "https://github.com/fantasyui-com/hurlyburly#readme",
   "dependencies": {
-    "transfusion": "^1.26.0"
+    "transfusion": "^1.28.0"
   },
   "devDependencies": {
     "babel-core": "^6.26.3",
