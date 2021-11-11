@@ -4,14 +4,15 @@
   "description": "Todo Application based on pookie object tree database.",
   "main": "index.js",
   "scripts": {
-    "build": "bin/build.sh"
+    "build": "bin/build.sh",
+    "save": "git add .; git commit -m 'New Release'; git push; npm version patch; npm publish; git push;"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/fantasyui-com/hurlyburly.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "fantasyui.com <fantasyui.com@gmail.com>",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/fantasyui-com/hurlyburly/issues"
